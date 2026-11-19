@@ -1,0 +1,1696 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>虚拟亚克力砖生成器 (virtual-acrylic-maker)</title>
+  <!-- 使用 Tailwind CSS CDN 快速构建响应式暗色工作室界面 -->
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <style>
+    /* 引入 Inter 现代无衬线字体，搭配中文字体回退栈 */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+    * { box-sizing: border-box; }
+
+    /* 页面整体深紫炭黑径向渐变背景，突出亚克力砖的通透与反光 */
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: radial-gradient(circle at 20% 0%, #1b132b 0%, #0d0a16 55%, #07050c 100%);
+      color: #f1eff7;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* 右侧控制面板的磨砂玻璃质感样式 */
+    .glass-panel {
+      background: rgba(22, 17, 36, 0.78);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid rgba(255, 255, 255, 0.09);
+    }
+
+    /* 通用选项按钮（底纹、金属边、分辨率预设）的默认/悬停/激活态 */
+    .option-btn {
+      transition: all 0.18s ease;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: rgba(255, 255, 255, 0.04);
+    }
+    .option-btn:hover {
+      background: rgba(255, 255, 255, 0.09);
+      border-color: rgba(196, 165, 255, 0.35);
+    }
+    .option-btn.active {
+      background: linear-gradient(135deg, rgba(168, 85, 247, 0.32), rgba(56, 189, 248, 0.24));
+      border-color: rgba(192, 132, 252, 0.85);
+      box-shadow: 0 0 0 1px rgba(192, 132, 252, 0.35), 0 6px 18px rgba(139, 92, 246, 0.22);
+      color: #ffffff;
+    }
+
+    /* 滑块与数字输入框的主题色美化 */
+    input[type="range"] {
+      accent-color: #c084fc;
+    }
+    input[type="number"] {
+      background: rgba(10, 8, 18, 0.75);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      color: #f8fafc;
+    }
+    input[type="number"]:focus {
+      outline: none;
+      border-color: #c084fc;
+      box-shadow: 0 0 0 2px rgba(192, 132, 252, 0.25);
+    }
+
+    /* 左侧预览舞台容器：支持外部文件拖入高亮 */
+    #stageWrap {
+      background: radial-gradient(circle at center, rgba(139, 92, 246, 0.12), rgba(7, 5, 14, 0.85));
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    #stageWrap.drag-over {
+      border-color: #c084fc;
+      box-shadow: 0 0 0 3px rgba(192, 132, 252, 0.35);
+    }
+
+    /* 实时预览画布：自适应屏幕高度，禁用默认触摸滚动以便拖拽旋转 */
+    #previewCanvas {
+      max-width: 100%;
+      max-height: 70vh;
+      width: auto;
+      height: auto;
+      border-radius: 14px;
+      box-shadow: 0 20px 55px rgba(0, 0, 0, 0.65);
+      touch-action: none;
+      user-select: none;
+    }
+
+    /* 鼠标抓取/拖拽手势样式 */
+    .cursor-grab-custom { cursor: grab; }
+    .cursor-grabbing-custom { cursor: grabbing; }
+  </style>
+</head>
+<body class="antialiased">
+  <div class="max-w-7xl mx-auto px-4 py-4 md:py-6">
+    <!-- ==================== 顶部标题栏与上传按钮 ==================== -->
+    <header class="flex flex-wrap items-center justify-between gap-3 mb-5">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-fuchsia-500 via-purple-500 to-cyan-400 flex items-center justify-center shadow-lg shadow-purple-500/25">
+          <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 3l2.4 6.6L21 12l-6.6 2.4L12 21l-2.4-6.6L3 12l6.6-2.4L12 3z"/>
+          </svg>
+        </div>
+        <div>
+          <h1 class="text-lg md:text-xl font-bold tracking-tight text-white">
+            虚拟亚克力砖生成器 <span class="text-xs font-normal text-purple-300/80 ml-1">virtual-acrylic-maker</span>
+          </h1>
+          <p class="text-xs text-slate-400">纯浏览器 WebGL 本地实时渲染 · 先预览调参再导出 GIF · 图片不上传服务器</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <label for="fileInput" class="cursor-pointer inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-medium bg-white/10 hover:bg-white/15 border border-white/15 text-white transition">
+          <svg class="w-4 h-4 text-fuchsia-300" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+          </svg>
+          <span>选择 / 更换图片</span>
+        </label>
+        <input id="fileInput" type="file" accept="image/png,image/jpeg,image/webp,image/bmp" class="hidden" />
+      </div>
+    </header>
+
+    <!-- ==================== 主体两栏布局 ==================== -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+      <!-- 左侧：3D 实时预览舞台 -->
+      <section class="lg:col-span-7 xl:col-span-8 flex flex-col gap-3">
+        <div id="stageWrap" class="relative rounded-2xl p-4 md:p-6 flex flex-col items-center justify-center min-h-[420px] md:min-h-[540px] transition">
+          <!-- 交互模式切换栏 + 实时角度读数 -->
+          <div class="w-full flex flex-wrap items-center justify-between gap-2 mb-4">
+            <div class="inline-flex rounded-xl p-1 bg-black/40 border border-white/10">
+              <button id="modeAutoBtn" type="button" class="px-3 py-1.5 rounded-lg text-xs font-medium transition bg-purple-500/30 text-white border border-purple-400/50">
+                自动摇晃循环
+              </button>
+              <button id="modeDragBtn" type="button" class="px-3 py-1.5 rounded-lg text-xs font-medium transition text-slate-300 hover:text-white border border-transparent">
+                鼠标拖拽指定角度
+              </button>
+            </div>
+
+            <div class="flex items-center gap-2 text-xs text-slate-300">
+              <span id="angleReadout" class="px-2.5 py-1 rounded-lg bg-black/40 border border-white/10 font-mono">
+                Y: 0.0° · X: 0.0°
+              </span>
+              <button id="resetAngleBtn" type="button" class="hidden px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/15 border border-white/10 text-slate-200 transition">
+                回正角度
+              </button>
+            </div>
+          </div>
+
+          <!-- 画布容器 + 无图时的上传引导蒙层 -->
+          <div class="relative flex items-center justify-center w-full">
+            <canvas id="previewCanvas" width="460" height="480" class="cursor-grab-custom"></canvas>
+            <div id="emptyStageOverlay" class="absolute inset-0 flex flex-col items-center justify-center rounded-xl bg-black/55 backdrop-blur-sm border-2 border-dashed border-purple-400/45 p-6 text-center cursor-pointer hover:border-purple-300/80 transition">
+              <div class="w-12 h-12 rounded-2xl bg-purple-500/20 border border-purple-400/40 flex items-center justify-center mb-3">
+                <svg class="w-6 h-6 text-purple-300" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+                </svg>
+              </div>
+              <p class="text-sm font-semibold text-white">点击选择图片，或将图片直接拖入此处</p>
+              <p class="text-xs text-slate-400 mt-1">支持 JPG / PNG（含透明底）/ WebP，纯本地渲染不上传</p>
+            </div>
+          </div>
+
+          <!-- 底部提示与当前尺寸读数 -->
+          <div class="w-full flex flex-wrap items-center justify-between gap-2 mt-4 text-xs text-slate-400">
+            <span id="stageHint">提示：支持直接将本地图片拖到此处替换 · 切换到「鼠标拖拽」可自由旋转观察侧边厚度与全息光纹</span>
+            <span id="metaReadout" class="font-mono text-slate-300">画布 460×480 · 砖体 340×340</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- 右侧：参数控制与导出面板 -->
+      <aside class="lg:col-span-5 xl:col-span-4 glass-panel rounded-2xl p-4 md:p-5 flex flex-col gap-5">
+        <!-- 1. 全息底纹风格 -->
+        <div>
+          <div class="flex items-center justify-between mb-2.5">
+            <h2 class="text-sm font-semibold text-white">1. 全息底纹风格</h2>
+            <span id="styleBadge" class="text-xs text-purple-300">宇宙星斑</span>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <button type="button" data-style="cosmos" class="style-btn option-btn active rounded-xl py-2 px-2 text-center">
+              <div class="text-xs font-semibold">宇宙星斑</div>
+              <div class="text-[11px] text-slate-400 mt-0.5">光球微星</div>
+            </button>
+            <button type="button" data-style="sunburst" class="style-btn option-btn rounded-xl py-2 px-2 text-center">
+              <div class="text-xs font-semibold">放射太阳纹</div>
+              <div class="text-[11px] text-slate-400 mt-0.5">旋转光束</div>
+            </button>
+            <button type="button" data-style="silk" class="style-btn option-btn rounded-xl py-2 px-2 text-center">
+              <div class="text-xs font-semibold">水波丝绸纹</div>
+              <div class="text-[11px] text-slate-400 mt-0.5">流动缎面</div>
+            </button>
+            <button type="button" data-style="none" class="style-btn option-btn rounded-xl py-2 px-2 text-center">
+              <div class="text-xs font-semibold">无底纹效果</div>
+              <div class="text-[11px] text-slate-400 mt-0.5">纯净原图</div>
+            </button>
+          </div>
+        </div>
+
+        <!-- 2. 金属卡边与烫金色调 -->
+        <div>
+          <div class="flex items-center justify-between mb-2.5">
+            <h2 class="text-sm font-semibold text-white">2. 金属卡边与烫金色调</h2>
+            <span id="metalBadge" class="text-xs text-amber-300">幻彩紫金</span>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <button type="button" data-metal="violet_gold" class="metal-btn option-btn active rounded-xl py-2 px-2 text-center">
+              <span class="inline-block w-3 h-3 rounded-full bg-gradient-to-r from-amber-300 to-purple-400 mr-1 align-middle"></span>
+              <span class="text-xs font-semibold align-middle">幻彩紫金</span>
+            </button>
+            <button type="button" data-metal="gold" class="metal-btn option-btn rounded-xl py-2 px-2 text-center">
+              <span class="inline-block w-3 h-3 rounded-full bg-gradient-to-r from-yellow-200 to-amber-500 mr-1 align-middle"></span>
+              <span class="text-xs font-semibold align-middle">鎏金色</span>
+            </button>
+            <button type="button" data-metal="silver" class="metal-btn option-btn rounded-xl py-2 px-2 text-center">
+              <span class="inline-block w-3 h-3 rounded-full bg-gradient-to-r from-slate-100 to-sky-300 mr-1 align-middle"></span>
+              <span class="text-xs font-semibold align-middle">冰银色</span>
+            </button>
+            <button type="button" data-metal="none" class="metal-btn option-btn rounded-xl py-2 px-2 text-center">
+              <span class="inline-block w-3 h-3 rounded-full border border-slate-400 bg-slate-700 mr-1 align-middle"></span>
+              <span class="text-xs font-semibold align-middle">无金属边</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 3. 画布与内部砖体分辨率设置 -->
+        <div class="space-y-3 pt-1 border-t border-white/10">
+          <div class="flex items-center justify-between">
+            <h2 class="text-sm font-semibold text-white">3. 画布与砖体分辨率</h2>
+            <span class="text-[11px] text-slate-400">支持预设或自由输入</span>
+          </div>
+
+          <!-- 三档快捷分辨率预设 -->
+          <div class="grid grid-cols-3 gap-2">
+            <button type="button" data-preset="460" class="preset-btn option-btn active rounded-xl py-2 px-2 text-center">
+              <div class="text-xs font-semibold">标准 460</div>
+              <div class="text-[10px] text-slate-400">轻量分享</div>
+            </button>
+            <button type="button" data-preset="800" class="preset-btn option-btn rounded-xl py-2 px-2 text-center">
+              <div class="text-xs font-semibold">高清 800</div>
+              <div class="text-[10px] text-slate-400">推荐收藏</div>
+            </button>
+            <button type="button" data-preset="1080" class="preset-btn option-btn rounded-xl py-2 px-2 text-center">
+              <div class="text-xs font-semibold">超清 1080</div>
+              <div class="text-[10px] text-slate-400">极致细节</div>
+            </button>
+          </div>
+
+          <!-- 自定义画布宽高（无上限） -->
+          <div class="grid grid-cols-2 gap-2.5">
+            <div>
+              <label for="canvasWInput" class="block text-[11px] text-slate-400 mb-1">画布宽度 (px)</label>
+              <input id="canvasWInput" type="number" min="32" step="10" value="460" class="w-full rounded-lg px-2.5 py-1.5 text-sm font-mono" />
+            </div>
+            <div>
+              <label for="canvasHInput" class="block text-[11px] text-slate-400 mb-1">画布高度 (px)</label>
+              <input id="canvasHInput" type="number" min="32" step="10" value="480" class="w-full rounded-lg px-2.5 py-1.5 text-sm font-mono" />
+            </div>
+          </div>
+
+          <!-- 自定义内部砖体尺寸（无上限，可锁定原图比例） -->
+          <div class="p-3 rounded-xl bg-black/25 border border-white/10 space-y-2.5">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-medium text-slate-200">内部亚克力砖尺寸</span>
+              <label class="inline-flex items-center gap-1.5 text-[11px] text-slate-300 cursor-pointer select-none">
+                <input id="lockAspectToggle" type="checkbox" checked class="rounded accent-purple-400" />
+                <span>锁定原图比例</span>
+              </label>
+            </div>
+
+            <div>
+              <div class="flex justify-between text-[11px] text-slate-400 mb-1">
+                <span>砖体缩放占比</span>
+                <span id="cardScaleLabel" class="font-mono text-purple-300">74%</span>
+              </div>
+              <input id="cardScaleSlider" type="range" min="10" max="100" value="74" class="w-full" />
+            </div>
+
+            <div class="grid grid-cols-2 gap-2.5">
+              <div>
+                <label for="cardWInput" class="block text-[11px] text-slate-400 mb-1">砖体宽 (px)</label>
+                <input id="cardWInput" type="number" min="16" step="2" value="340" class="w-full rounded-lg px-2.5 py-1.5 text-xs font-mono" />
+              </div>
+              <div>
+                <label for="cardHInput" class="block text-[11px] text-slate-400 mb-1">砖体高 (px)</label>
+                <input id="cardHInput" type="number" min="16" step="2" value="340" class="w-full rounded-lg px-2.5 py-1.5 text-xs font-mono" />
+              </div>
+            </div>
+          </div>
+
+          <!-- 显眼的超高分辨率风险注意事项 -->
+          <div class="rounded-xl px-3.5 py-2.5 text-xs leading-relaxed bg-amber-500/15 border border-amber-400/45 text-amber-200 flex items-start gap-2">
+            <svg class="w-4 h-4 text-amber-300 shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+            </svg>
+            <div>
+              <span class="font-semibold text-amber-100">注意事项：</span>分辨率设置过大有导致浏览器卡死或崩溃的风险，且导出 GIF 的时间也会明显延长，建议根据设备性能合理设置。
+            </div>
+          </div>
+        </div>
+
+        <!-- 4. 导出操作区 -->
+        <div class="space-y-2.5 pt-2 border-t border-white/10">
+          <button id="exportGifBtn" type="button" class="w-full py-3 px-4 rounded-xl font-semibold text-sm text-white bg-gradient-to-r from-fuchsia-500 via-purple-500 to-cyan-500 hover:brightness-110 active:scale-[0.99] transition shadow-lg shadow-purple-500/25 flex items-center justify-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V3"/>
+            </svg>
+            <span>导出 48 帧无缝循环 GIF</span>
+          </button>
+
+          <button id="exportPngBtn" type="button" class="w-full py-2.5 px-4 rounded-xl font-medium text-xs text-slate-200 bg-white/8 hover:bg-white/14 border border-white/12 transition">
+            保存当前角度高清静图 (PNG)
+          </button>
+
+          <!-- 导出进度条与取消按钮 -->
+          <div id="progressBox" class="hidden rounded-xl p-3 bg-black/40 border border-purple-400/30 space-y-2">
+            <div class="flex items-center justify-between text-xs">
+              <span id="progressText" class="text-purple-200">准备渲染...</span>
+              <button id="cancelExportBtn" type="button" class="text-rose-300 hover:text-rose-200 underline">取消</button>
+            </div>
+            <div class="w-full h-2 rounded-full bg-white/10 overflow-hidden">
+              <div id="progressBar" class="h-full bg-gradient-to-r from-fuchsia-400 to-cyan-400 transition-all duration-150" style="width: 0%"></div>
+            </div>
+          </div>
+
+          <!-- 轻量级提示条（替代浏览器原生 alert） -->
+          <div id="toastMsg" class="hidden rounded-xl px-3 py-2 text-xs bg-emerald-500/15 border border-emerald-400/30 text-emerald-200 text-center"></div>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <script>
+  /**
+   * ============================================================================
+   * 虚拟亚克力砖生成器 (virtual-acrylic-maker) 核心前端引擎
+   * ============================================================================
+   * 【架构总览（适合前端与图形学新手阅读）】
+   * 本文件将所有逻辑封装在一个自执行函数 (IIFE) 中，不污染全局命名空间，共分 7 大模块：
+   *   模块 1：全局状态与配置常量（管理底纹、金属色、画布/砖体尺寸、拖拽角度等）
+   *   模块 2：确定性伪随机数与无缝循环空间粒子生成器
+   *   模块 3：WebGL1 实时 GPU 着色器引擎（圆角 SDF、8 层立体厚度、3 种全息底纹、Sobel 微浮雕）
+   *   模块 4：图片载入器（支持透明 PNG 合成珍珠底、自动提取主色调与高光星芒锚点）
+   *   模块 5：Canvas2D 最终合成管线（摄影棚暗角 + 呼吸光晕 + 悬浮阴影 + WebGL 砖体 + 星芒粒子）
+   *   模块 6：零依赖纯 JS GIF89a 编码器（Median Cut 256 色量化 + 误差抑制抖动 + LZW 压缩）
+   *   模块 7：UI 事件绑定、指针拖拽交互、导出控制与 60fps 渲染主循环
+   * ============================================================================
+   */
+  (() => {
+    // =========================================================================
+    // 模块 1：全局配置常量、状态机与 DOM 引用
+    // =========================================================================
+    const STYLE_LABELS = {
+      cosmos: "宇宙星斑",
+      sunburst: "放射太阳纹",
+      silk: "水波丝绸纹",
+      none: "无底纹",
+    };
+
+    const METAL_LABELS = {
+      violet_gold: "幻彩紫金",
+      gold: "鎏金色",
+      silver: "冰银色",
+      none: "无金属边",
+    };
+
+    // 每种金属边框的主色 (colA) 与辅色 (colB)，范围 0.0 ~ 1.0
+    const METAL_PALETTES = {
+      violet_gold: [[0.96, 0.78, 0.48], [0.82, 0.56, 0.96]],
+      gold:        [[0.99, 0.83, 0.40], [0.86, 0.64, 0.24]],
+      silver:      [[0.86, 0.93, 1.00], [0.62, 0.78, 0.96]],
+      none:        [[0.22, 0.20, 0.26], [0.14, 0.12, 0.18]], // 关闭金属边时使用低调哑光侧边
+    };
+
+    // 应用核心响应式状态对象
+    const state = {
+      hasImage: false,         // 是否已上传图片（初始为空，等待用户选图）
+      imgName: "virtual_acrylic",
+      imgWidth: 1080,          // 原图原始宽度（用于锁定宽高比计算）
+      imgHeight: 1080,         // 原图原始高度
+      style: "cosmos",         // 当前全息底纹风格：cosmos | sunburst | silk | none
+      metal: "violet_gold",    // 当前金属卡边色调：violet_gold | gold | silver | none
+      mode: "auto",            // 预览模式：auto（自动摇晃）| drag（鼠标拖拽指定角度）
+      canvasW: 460,            // 输出画布宽度 (px)
+      canvasH: 480,            // 输出画布高度 (px)
+      cardW: 340,              // 内部亚克力砖宽度 (px)
+      cardH: 340,              // 内部亚克力砖高度 (px)
+      lockAspect: true,        // 是否锁定原图宽高比
+      dragYaw: 12.0,           // 拖拽模式下的 Y 轴偏航角（左右转）
+      dragPitch: -6.0,         // 拖拽模式下的 X 轴俯仰角（上下倾）
+      isDragging: false,       // 当前是否正在按住拖拽
+      lastPointerX: 0,
+      lastPointerY: 0,
+      isExporting: false,      // 是否正在导出 GIF（导出期间暂停实时循环以节省性能）
+      cancelExport: false,     // 用户点击“取消导出”标志位
+      meanRgb: [0.65, 0.55, 0.78], // 从上传原图提取的主色调（驱动摄影棚背景配色）
+      starAnchors: [],         // 自动检测出的高光焦点，用于锚定 4 芒十字星闪
+    };
+
+    // 获取页面所需 DOM 元素
+    const canvas = document.getElementById("previewCanvas");
+    const stageWrap = document.getElementById("stageWrap");
+    const emptyStageOverlay = document.getElementById("emptyStageOverlay");
+    const fileInput = document.getElementById("fileInput");
+    const modeAutoBtn = document.getElementById("modeAutoBtn");
+    const modeDragBtn = document.getElementById("modeDragBtn");
+    const resetAngleBtn = document.getElementById("resetAngleBtn");
+    const angleReadout = document.getElementById("angleReadout");
+    const metaReadout = document.getElementById("metaReadout");
+    const styleBadge = document.getElementById("styleBadge");
+    const metalBadge = document.getElementById("metalBadge");
+    const canvasWInput = document.getElementById("canvasWInput");
+    const canvasHInput = document.getElementById("canvasHInput");
+    const cardWInput = document.getElementById("cardWInput");
+    const cardHInput = document.getElementById("cardHInput");
+    const cardScaleSlider = document.getElementById("cardScaleSlider");
+    const cardScaleLabel = document.getElementById("cardScaleLabel");
+    const lockAspectToggle = document.getElementById("lockAspectToggle");
+    const exportGifBtn = document.getElementById("exportGifBtn");
+    const exportPngBtn = document.getElementById("exportPngBtn");
+    const progressBox = document.getElementById("progressBox");
+    const progressText = document.getElementById("progressText");
+    const progressBar = document.getElementById("progressBar");
+    const cancelExportBtn = document.getElementById("cancelExportBtn");
+    const toastMsg = document.getElementById("toastMsg");
+
+    /** 在右下角显示轻量级状态提示，自动延时隐藏 */
+    function showToast(text, duration = 3200) {
+      toastMsg.textContent = text;
+      toastMsg.classList.remove("hidden");
+      clearTimeout(showToast._timer);
+      showToast._timer = setTimeout(() => toastMsg.classList.add("hidden"), duration);
+    }
+
+    // =========================================================================
+    // 模块 2：确定性伪随机数 (Mulberry32) 与无缝循环空间粒子
+    // =========================================================================
+    /** 固定种子的伪随机数生成器，确保每次打开与导出 GIF 的粒子分布一致 */
+    function mulberry32(seed) {
+      let a = seed >>> 0;
+      return function() {
+        a |= 0; a = (a + 0x6D2B79F5) | 0;
+        let t = Math.imul(a ^ (a >>> 15), 1 | a);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    }
+
+    /**
+     * 生成前后景微光漂浮粒子。
+     * 无缝循环秘诀：fx / fy / tf 均为整数，当相位 theta 从 0 走到 2π 时，
+     * 所有粒子的坐标和亮度都会精准回到第 0 帧的初始状态，绝无跳变。
+     */
+    function createParticles(count, isForeground, seed) {
+      const rand = mulberry32(seed);
+      const palette = [
+        [255, 184, 219], [133, 240, 255], [255, 235, 143],
+        [209, 173, 255], [255, 247, 250]
+      ];
+      const arr = [];
+      for (let i = 0; i < count; i++) {
+        arr.push({
+          x0: 0.05 + rand() * 0.90,            // 基准中心 X（归一化 0~1）
+          y0: 0.05 + rand() * 0.90,            // 基准中心 Y（归一化 0~1）
+          rx: 0.02 + rand() * 0.045,           // 水平漂移振幅
+          ry: 0.02 + rand() * 0.055,           // 垂直漂移振幅
+          px: rand() * Math.PI * 2,            // X 初始相位
+          py: rand() * Math.PI * 2,            // Y 初始相位
+          fx: rand() < 0.65 ? 1 : 2,           // X 周期频率（必须为整数）
+          fy: rand() < 0.65 ? 1 : 2,           // Y 周期频率（必须为整数）
+          tp: rand() * Math.PI * 2,            // 闪烁初始相位
+          tf: rand() < 0.4 ? 1 : (rand() < 0.8 ? 2 : 3), // 闪烁频率（整数）
+          size: isForeground ? (1.8 + rand() * 2.0) : (2.4 + rand() * 3.8),
+          alpha: isForeground ? (0.35 + rand() * 0.45) : (0.28 + rand() * 0.52),
+          color: palette[i % palette.length],
+          isStar: rand() < (isForeground ? 0.48 : 0.25),
+        });
+      }
+      return arr;
+    }
+
+    const bgParticles = createParticles(28, false, 101); // 砖体背后的柔和景深光斑
+    const fgParticles = createParticles(14, true, 202);  // 砖体前景的清晰星尘微光
+
+    // =========================================================================
+    // 模块 3：WebGL1 实时 GPU 着色器引擎（3D 透视 + 厚度切片 + 全息着色）
+    // =========================================================================
+    // 离屏 WebGL 画布：GPU 在此完成高算力的 3D 透视与逐像素着色，再交给主画布合成
+    const glCanvas = document.createElement("canvas");
+    const gl = glCanvas.getContext("webgl", {
+      alpha: true,
+      antialias: true,
+      premultipliedAlpha: false,
+      preserveDrawingBuffer: true, // 允许 Canvas2D 随时 drawImage 读取 WebGL 帧缓冲
+    });
+    const ctx2d = canvas.getContext("2d", { willReadFrequently: true });
+
+    // 顶点着色器：将单位矩形顶点乘以 4x4 透视矩阵 uMvp，投射到 3D 空间位置
+    const VS_SRC = `
+      attribute vec2 aPos;
+      attribute vec2 aUv;
+      uniform mat4 uMvp;
+      varying vec2 vUv;
+      void main() {
+        vUv = aUv;
+        gl_Position = uMvp * vec4(aPos, 0.0, 1.0);
+      }
+    `;
+
+    // 片元着色器：逐像素计算圆角 SDF、8 层拉丝厚度、3 种全息底纹、彩虹衍射与 Sobel 线稿浮雕
+    const FS_SRC = `
+      precision highp float;
+      varying vec2 vUv;
+      uniform sampler2D uTex;        // 用户上传的原图纹理
+      uniform vec2 uCardSize;        // 砖体像素尺寸 (宽, 高)
+      uniform float uCornerRadius;   // 圆角半径 (px)
+      uniform float uResScale;       // 分辨率缩放系数 (canvasW / 460)
+      uniform int uStyle;            // 0=宇宙星斑, 1=放射太阳纹, 2=水波丝绸纹, 3=无底纹
+      uniform int uEnableMetal;      // 1=启用金属倒角与烫金, 0=无金属边
+      uniform vec3 uColA;            // 金属主色
+      uniform vec3 uColB;            // 金属辅色
+      uniform float uTheta;          // 动画主周期相位 (0 ~ 2π)
+      uniform float uNyaw;           // 归一化 Y 轴倾角 (-1 ~ 1)
+      uniform float uNpitch;         // 归一化 X 轴倾角 (-1 ~ 1)
+      uniform int uPassMode;         // 0=正面砖体, 1=背面厚度切片, 2=投影遮罩
+      uniform float uDepthFade;      // 厚度切片由前向后的深度明暗衰减
+      uniform float uLayerIdx;       // 当前切片层编号 (1 ~ 8)
+
+      // 轻量二维哈希函数（用于程序化生成宇宙星斑的随机位置与大小）
+      float hash21(vec2 p) {
+        p = fract(p * vec2(123.34, 456.21));
+        p += dot(p, p + 45.32);
+        return fract(p.x * p.y);
+      }
+
+      // 余弦彩虹光谱：RGB 三通道相位错开 120° (2.094 弧度)
+      vec3 spectralRainbow(float phase) {
+        return clamp(vec3(
+          0.50 + 0.50 * cos(phase),
+          0.48 + 0.50 * cos(phase + 2.094),
+          0.54 + 0.46 * cos(phase + 4.188)
+        ), 0.0, 1.0);
+      }
+
+      // 柔光混合公式：在浅色原图上叠加彩虹不洗白、不过曝
+      vec3 softLight(vec3 base, vec3 blend) {
+        return (1.0 - 2.0 * blend) * (base * base) + 2.0 * blend * base;
+      }
+
+      // RGB 转 HSV（用于自动识别高饱和亮部作为局部烫金区）
+      vec3 rgb2hsv(vec3 c) {
+        vec4 K = vec4(0.0, -1.0/3.0, 2.0/3.0, -1.0);
+        vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));
+        vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r));
+        float d = q.x - min(q.w, q.y);
+        float e = 1.0e-5;
+        return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
+      }
+
+      // 圆角矩形有向距离场 (SDF)：内部<0，边缘=0，外部>0
+      float roundedRectSdf(vec2 p, vec2 halfSize, float r) {
+        vec2 q = abs(p) - (halfSize - vec2(r));
+        return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
+      }
+
+      // 程序化「宇宙星斑」底纹：3 组错相闪烁的环状星斑光球 + 蚀刻十字微星 + 斜向微光栅
+      void evalCosmos(vec2 uv, float theta, float nyaw, float npitch, out float patternMod, out float hiLayer) {
+        float orbs = 0.0;
+        float stars = 0.0;
+        for (int b = 0; b < 3; b++) {
+          float fb = float(b);
+          float scale = 5.0 + fb * 3.2;
+          vec2 g = uv * scale + vec2(fb * 1.73, fb * 2.41);
+          vec2 id = floor(g);
+          vec2 f = fract(g) - 0.5;
+          float h1 = hash21(id + fb * 19.3);
+          float h2 = hash21(id * 1.37 + fb * 7.1);
+          vec2 offset = (vec2(h1, h2) - 0.5) * 0.55;
+          vec2 d = f - offset;
+          float dist = length(d);
+          float rad = 0.16 + 0.16 * h1;
+          float core = exp(-pow(dist / (rad * 0.52), 2.0)) * 0.72;
+          float ring = exp(-pow((dist - rad * 0.76) / (rad * 0.16), 2.0)) * 0.92;
+          float w = 0.5 + 0.5 * sin(theta + fb * 2.094 + (b == 1 ? npitch : nyaw) * 1.6);
+          orbs += (core + ring) * w * (0.45 + 0.55 * h2);
+
+          // 蚀刻 4 芒微星
+          vec2 sd = abs(f - (vec2(h2, 1.0 - h1) - 0.5) * 0.5);
+          float sp = exp(-sd.x / 0.16) * exp(-pow(sd.y / 0.028, 2.0))
+                   + exp(-sd.y / 0.16) * exp(-pow(sd.x / 0.028, 2.0));
+          stars += sp * pow(w, 1.4) * (0.5 + 0.5 * h1);
+        }
+        vec2 u = uv * 2.0 - 1.0;
+        float grating = 0.5 + 0.5 * sin((u.x * 0.72 + u.y * 0.69) * 44.0 + nyaw * 5.5 + npitch * 3.2);
+        patternMod = clamp(0.35 * grating + 0.65 * clamp(orbs, 0.0, 1.0), 0.0, 1.0);
+        hiLayer = clamp(0.45 * orbs + 0.52 * stars, 0.0, 1.35);
+      }
+
+      void main() {
+        vec2 px = (vUv - 0.5) * uCardSize;
+        vec2 halfSize = uCardSize * 0.5;
+        float sdf = roundedRectSdf(px, halfSize, uCornerRadius);
+        // 用 smoothstep 做出抗锯齿平滑圆角边缘
+        float alpha = 1.0 - smoothstep(-0.9 * uResScale, 0.7 * uResScale, sdf);
+        if (alpha < 0.004) discard;
+
+        // 【通道 2】阴影绘制模式：仅输出纯黑圆角轮廓，后续由 Canvas2D 做高斯模糊
+        if (uPassMode == 2) {
+          gl_FragColor = vec4(0.0, 0.0, 0.0, alpha);
+          return;
+        }
+
+        // 【通道 1】背面 8 层厚度切片模式：呈现实体亚克力/金属侧边厚度
+        if (uPassMode == 1) {
+          if (uEnableMetal == 0) {
+            vec3 matteEdge = mix(uColB, uColA, 0.5) * uDepthFade;
+            gl_FragColor = vec4(clamp(matteEdge, 0.0, 1.0), alpha);
+            return;
+          }
+          float grad = vUv.x * 0.55 + vUv.y * 0.45;
+          float mixv = 0.5 + 0.5 * sin(grad * 3.14159 * 2.5);
+          float brush = sin(vUv.y * 190.0 + sin(vUv.x * 12.0) * 1.5) * 0.5 + 0.5;
+          vec3 base = mix(uColB, uColA, mixv) + (brush - 0.5) * 0.14;
+          float gleam = 0.76 + 0.42 * (0.5 + 0.5 * sin(uTheta + uLayerIdx * 0.42));
+          gl_FragColor = vec4(clamp(base * uDepthFade * gleam, 0.0, 1.0), alpha);
+          return;
+        }
+
+        // 【通道 0】正面全息着色器主流程
+        vec3 baseRgb = texture2D(uTex, vUv).rgb;
+        vec3 hsv = rgb2hsv(baseRgb);
+        float gray = dot(baseRgb, vec3(0.299, 0.587, 0.114));
+
+        // 对圆角 SDF 做中心差分求梯度，得到指向外部的金属倒角法线
+        float eps = 1.0;
+        float sx = roundedRectSdf(px + vec2(eps, 0.0), halfSize, uCornerRadius) - roundedRectSdf(px - vec2(eps, 0.0), halfSize, uCornerRadius);
+        float sy = roundedRectSdf(px + vec2(0.0, eps), halfSize, uCornerRadius) - roundedRectSdf(px - vec2(0.0, eps), halfSize, uCornerRadius);
+        vec2 bevelN = normalize(vec2(sx, sy) + vec2(1e-5));
+
+        // 分区遮罩：外沿金属倒角、内侧细金框、局部亮部烫金区、全息背景区
+        float bevelMask = smoothstep(-10.5 * uResScale, -6.5 * uResScale, sdf) * (1.0 - smoothstep(-0.2 * uResScale, 0.8 * uResScale, sdf));
+        float innerTrim = exp(-pow((sdf + 13.5 * uResScale) / (1.4 * uResScale), 2.0)) * 0.90;
+
+        float isYellow = step(0.095, hsv.x) * step(hsv.x, 0.20) * step(0.28, hsv.y) * step(0.72, hsv.z);
+        float isVivid = step(0.45, hsv.y) * step(0.82, hsv.z);
+        float highlightFoil = clamp(max(isYellow, isVivid), 0.0, 1.0);
+
+        float darkWeight = clamp((0.90 - gray) / 0.36, 0.0, 1.0);
+        float satWeight = smoothstep(0.06, 0.28, hsv.y);
+        float holoBgMask = clamp(0.24 + 0.60 * satWeight + 0.45 * darkWeight, 0.0, 1.0) * (1.0 - 0.45 * highlightFoil);
+
+        vec2 u = vUv * 2.0 - 1.0;
+        float r = length(u);
+        float angle = atan(u.y, u.x);
+        float diagUv = u.x * 0.76 + u.y * 0.65;
+        vec2 lightDir = vec2(cos(uTheta + 0.4), sin(uTheta + 0.4));
+
+        // 双层错向流动的彩虹衍射光
+        float phase1 = (u.x * 3.4 + u.y * 2.6) + uNyaw * 4.2 + uNpitch * 2.3 + uTheta;
+        float phase2 = (u.x * -2.5 + u.y * 3.6) - uNyaw * 3.2 + uNpitch * 3.6 - uTheta;
+        vec3 dualRainbow = 0.56 * spectralRainbow(phase1) + 0.44 * spectralRainbow(phase2);
+
+        vec3 face = baseRgb;
+        float sweepCenter = uNyaw * 1.25 + uNpitch * 0.45;
+        float bandP = exp(-pow((diagUv - sweepCenter) / 0.19, 2.0));
+
+        // 当选择了全息底纹（uStyle != 3）时，叠加底纹、虹彩、Sobel 浮雕与斜向玻璃扫光
+        if (uStyle != 3) {
+          float patternMod = 0.0;
+          float styleHi = 0.0;
+          if (uStyle == 0) {
+            evalCosmos(vUv, uTheta, uNyaw, uNpitch, patternMod, styleHi);
+          } else if (uStyle == 1) {
+            // 放射太阳纹：严格使用 uTheta 整数倍（1.0 与 2.0）保证首尾无缝循环
+            float rotMain = uNyaw * 0.75 + uTheta * 1.0;
+            float rotFine = uNyaw * 1.10 + uTheta * 2.0;
+            float raysMain = pow(0.5 + 0.5 * sin(angle * 24.0 + rotMain), 2.6);
+            float raysFine = pow(0.5 + 0.5 * sin(angle * 48.0 - rotFine), 3.2);
+            float rings = pow(0.5 + 0.5 * sin(r * 22.0 - uTheta * 2.0 - uNpitch * 3.0), 2.0);
+            float radialEnv = smoothstep(0.05, 0.35, r);
+            float centerHalo = exp(-pow(r / 0.38, 2.0)) * (0.45 + 0.25 * sin(2.0 * uTheta));
+            float raysComb = (0.72 * raysMain + 0.28 * raysFine) * (0.35 + 0.65 * radialEnv);
+            patternMod = clamp(0.75 * raysComb + 0.25 * rings, 0.0, 1.0);
+            styleHi = clamp(0.88 * raysComb + 0.32 * rings * radialEnv + 0.35 * centerHalo, 0.0, 1.4);
+          } else {
+            // 水波丝绸纹：多层非线性扭曲波浪模拟流动缎面珠光
+            float warp1 = sin(u.y * 5.2 + uNyaw * 2.4 + uTheta) * 1.8;
+            float warp2 = cos(u.x * 4.6 - uNpitch * 2.2 - uTheta) * 1.5;
+            float fold1 = pow(0.5 + 0.5 * sin(u.x * 9.5 + warp1 + uNyaw * 3.5), 2.2);
+            float fold2 = pow(0.5 + 0.5 * sin((u.x * 0.55 - u.y * 0.83) * 12.0 + warp2 - uNpitch * 3.2), 2.4);
+            float microSilk = 0.5 + 0.5 * sin((u.x * 0.3 + u.y * 0.95) * 32.0 + warp1 * 1.6);
+            float waves = 0.58 * fold1 + 0.42 * fold2;
+            patternMod = clamp(0.78 * waves + 0.22 * microSilk, 0.0, 1.0);
+            styleHi = clamp(pow(waves, 1.35) * 1.15 + 0.18 * microSilk, 0.0, 1.35);
+          }
+
+          // 柔光混入彩虹衍射 + 滤色叠加专属高光层
+          vec3 prismSoft = softLight(face, dualRainbow);
+          float diffWeight = (0.20 + 0.44 * patternMod) * holoBgMask;
+          face = mix(face, prismSoft, diffWeight);
+
+          vec3 styleRgb = (0.68 * dualRainbow + 0.32) * (styleHi * holoBgMask);
+          face = 1.0 - (1.0 - face) * (1.0 - clamp(styleRgb * 0.72, 0.0, 0.76));
+
+          // 线稿微浮雕：采样上下左右 4 个邻域像素计算梯度，模拟立体油墨边缘反光
+          vec2 texel = 1.4 / uCardSize;
+          float gL = dot(texture2D(uTex, vUv + vec2(-texel.x, 0.0)).rgb, vec3(0.299, 0.587, 0.114));
+          float gR = dot(texture2D(uTex, vUv + vec2( texel.x, 0.0)).rgb, vec3(0.299, 0.587, 0.114));
+          float gT = dot(texture2D(uTex, vUv + vec2(0.0, -texel.y)).rgb, vec3(0.299, 0.587, 0.114));
+          float gB = dot(texture2D(uTex, vUv + vec2(0.0,  texel.y)).rgb, vec3(0.299, 0.587, 0.114));
+          vec2 grad = vec2(gR - gL, gB - gT);
+          float edgeMag = clamp(length(grad) * 3.8, 0.0, 1.0);
+          vec2 gradN = grad / (length(grad) + 1e-5);
+          float embossDot = dot(gradN, lightDir);
+          vec3 embossCol = 0.55 * vec3(1.0, 0.94, 0.82) + 0.45 * dualRainbow;
+          face += max(embossDot, 0.0) * edgeMag * embossCol * 0.34 - max(-embossDot, 0.0) * edgeMag * 0.08;
+
+          // 斜向玻璃镜面扫光带 + 随倾角移动的聚光灯
+          float bandS = exp(-pow((diagUv - (sweepCenter - 0.38)) / 0.08, 2.0)) * 0.58;
+          float glareBand = (bandP + bandS) * (0.24 + 0.38 * patternMod);
+          float spot = exp(-(pow(u.x - uNyaw * 0.65, 2.0) + pow(u.y - uNpitch * 0.55, 2.0)) * 1.65) * 0.14;
+          vec3 glareCol = 0.62 * vec3(1.0, 0.98, 1.0) + 0.38 * dualRainbow;
+          face = 1.0 - (1.0 - face) * (1.0 - clamp((glareBand + spot) * glareCol * 0.64, 0.0, 0.62));
+        }
+
+        // 当启用金属卡边（uEnableMetal == 1）时，叠加立体倒角金属边、细金框与局部亮部烫金
+        if (uEnableMetal == 1) {
+          float bevelDot = dot(bevelN, lightDir);
+          float bevelSpec = pow(clamp(0.5 + 0.5 * bevelDot, 0.0, 1.0), 2.2);
+          float bevelSharp = pow(clamp(bevelDot, 0.0, 1.0), 6.0);
+          vec3 metalBase = 0.50 * uColA + 0.30 * uColB + 0.20 * dualRainbow;
+          vec3 bevelShaded = clamp(
+            metalBase * (0.60 + 0.58 * bevelSpec) + vec3(1.0, 0.96, 0.92) * (bevelSharp * 0.78 + bandP * 0.48),
+            0.0, 1.0
+          );
+          face = mix(face, bevelShaded, bevelMask * 0.92);
+          vec3 trimCol = clamp(metalBase * 1.15 + bandP * 0.45, 0.0, 1.0);
+          face = mix(face, trimCol, innerTrim * 0.65);
+
+          float foilGleam = (0.20 + 0.55 * bandP + 0.25 * (0.5 + 0.5 * sin(2.0 * uTheta))) * highlightFoil;
+          face = clamp(face + foilGleam * uColA * 0.28, 0.0, 1.0);
+        }
+
+        gl_FragColor = vec4(face, alpha);
+      }
+    `;
+
+    let glProgram = null;
+    let glTex = null;
+    let glLoc = {};
+
+    /** 编译着色器、绑定矩形顶点缓冲并创建原图纹理对象 */
+    function initWebGL() {
+      if (!gl) return false;
+      const compile = (type, src) => {
+        const s = gl.createShader(type);
+        gl.shaderSource(s, src);
+        gl.compileShader(s);
+        if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+          console.error(gl.getShaderInfoLog(s));
+          return null;
+        }
+        return s;
+      };
+      const vs = compile(gl.VERTEX_SHADER, VS_SRC);
+      const fs = compile(gl.FRAGMENT_SHADER, FS_SRC);
+      if (!vs || !fs) return false;
+
+      glProgram = gl.createProgram();
+      gl.attachShader(glProgram, vs);
+      gl.attachShader(glProgram, fs);
+      gl.linkProgram(glProgram);
+      gl.useProgram(glProgram);
+
+      // 单位矩形的 4 个顶点 (x, y, u, v)，用 TRIANGLE_STRIP 一次画出
+      const quad = new Float32Array([
+        -0.5, -0.5, 0.0, 1.0,
+         0.5, -0.5, 1.0, 1.0,
+        -0.5,  0.5, 0.0, 0.0,
+         0.5,  0.5, 1.0, 0.0,
+      ]);
+      const buf = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+      gl.bufferData(gl.ARRAY_BUFFER, quad, gl.STATIC_DRAW);
+
+      const aPos = gl.getAttribLocation(glProgram, "aPos");
+      const aUv = gl.getAttribLocation(glProgram, "aUv");
+      gl.enableVertexAttribArray(aPos);
+      gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 16, 0);
+      gl.enableVertexAttribArray(aUv);
+      gl.vertexAttribPointer(aUv, 2, gl.FLOAT, false, 16, 8);
+
+      const uniforms = [
+        "uMvp", "uTex", "uCardSize", "uCornerRadius", "uResScale",
+        "uStyle", "uEnableMetal", "uColA", "uColB", "uTheta", "uNyaw", "uNpitch",
+        "uPassMode", "uDepthFade", "uLayerIdx"
+      ];
+      uniforms.forEach(u => { glLoc[u] = gl.getUniformLocation(glProgram, u); });
+
+      glTex = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, glTex);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+      return true;
+    }
+
+    const webglReady = initWebGL();
+
+    /**
+     * 构造严格正交的 4x4 列主序透视投影矩阵 (MVP)。
+     * 坐标系约定：zOffset > 0 表示位于砖体正面 (z=0) 后方（更远离镜头），
+     * 保证大角度同时向 X / Y 斜向拖拽时砖体保持刚体矩形，绝不发生平行四边形错切变形。
+     */
+    function buildCardMvp(cardW, cardH, canvasW, canvasH, yawDeg, pitchDeg, rollDeg, zOffset, focal, tx, ty) {
+      const ry = yawDeg * Math.PI / 180;
+      const rx = pitchDeg * Math.PI / 180;
+      const rz = rollDeg * Math.PI / 180;
+      const cy = Math.cos(ry), sy = Math.sin(ry);
+      const cx = Math.cos(rx), sx = Math.sin(rx);
+      const cz = Math.cos(rz), sz = Math.sin(rz);
+
+      // R = Rz * Rx * Ry（严格正交旋转矩阵）
+      const r00 = cz * cy - sz * sx * sy, r01 = -sz * cx, r02 = cz * sy + sz * sx * cy;
+      const r10 = sz * cy + cz * sx * sy, r11 =  cz * cx, r12 = sz * sy - cz * sx * cy;
+      const r20 = -cx * sy,               r21 =  sx,      r22 = cx * cy;
+
+      const sxF = focal / (canvasW * 0.5);
+      const syF = -focal / (canvasH * 0.5);
+      const ox = tx / (canvasW * 0.5);
+      const oy = -(ty - 0.02 * canvasH) / (canvasH * 0.5);
+
+      const m = new Float32Array(16);
+      // 第 0 列：对应本地 X 坐标 (aPos.x * cardW)
+      m[0] = (r00 * sxF + r20 * ox) * cardW;
+      m[1] = (r10 * syF + r20 * oy) * cardW;
+      m[2] = 0;
+      m[3] = r20 * cardW;
+
+      // 第 1 列：对应本地 Y 坐标 (-aPos.y * cardH)
+      m[4] = -(r01 * sxF + r21 * ox) * cardH;
+      m[5] = -(r11 * syF + r21 * oy) * cardH;
+      m[6] = 0;
+      m[7] = -r21 * cardH;
+
+      // 第 2 列：占位
+      m[10] = 1;
+
+      // 第 3 列：对应深度偏移 zOffset 的平移与透视分母 zCam
+      const zCam0 = focal + r22 * zOffset;
+      m[12] = r02 * zOffset * sxF + zCam0 * ox;
+      m[13] = r12 * zOffset * syF + zCam0 * oy;
+      m[14] = 0;
+      m[15] = zCam0;
+      return m;
+    }
+
+    /** 将砖体表面的归一化坐标 (u, v) 精准投影到 2D 画布像素坐标，用于锁定 4 芒星闪位置 */
+    function projectCardPoint(u, v, cardW, cardH, canvasW, canvasH, yawDeg, pitchDeg, rollDeg, focal, ty) {
+      const ry = yawDeg * Math.PI / 180;
+      const rx = pitchDeg * Math.PI / 180;
+      const rz = rollDeg * Math.PI / 180;
+      const cy = Math.cos(ry), sy = Math.sin(ry);
+      const cx = Math.cos(rx), sx = Math.sin(rx);
+      const cz = Math.cos(rz), sz = Math.sin(rz);
+
+      const r00 = cz * cy - sz * sx * sy, r01 = -sz * cx;
+      const r10 = sz * cy + cz * sx * sy, r11 =  cz * cx;
+      const r20 = -cx * sy,               r21 =  sx;
+
+      const lx = (u - 0.5) * cardW;
+      const ly = (v - 0.5) * cardH;
+      const px = r00 * lx + r01 * ly;
+      const py = r10 * lx + r11 * ly;
+      const pz = r20 * lx + r21 * ly;
+      const zCam = focal + pz;
+      return [
+        px * focal / zCam + canvasW * 0.5,
+        py * focal / zCam + canvasH * 0.48 + ty,
+      ];
+    }
+
+    // =========================================================================
+    // 模块 4：图片载入器（透明 PNG 珍珠底合成 + 自动主色调与星芒锚点分析）
+    // =========================================================================
+    const imgCanvas = document.createElement("canvas");
+    const imgCtx = imgCanvas.getContext("2d", { willReadFrequently: true });
+
+    function loadImageSource(src, fileName = "virtual_acrylic") {
+      const img = new Image();
+      img.onload = () => {
+        state.imgName = fileName.replace(/\.[^.]+$/, "") || "virtual_acrylic";
+        state.imgWidth = img.naturalWidth || 1080;
+        state.imgHeight = img.naturalHeight || 1080;
+
+        // 将图片缩放到合适纹理尺寸并铺底柔和珍珠白，兼容透明底 PNG 抠图
+        const texMax = 2048;
+        const scale = Math.min(1, texMax / Math.max(state.imgWidth, state.imgHeight));
+        const tw = Math.max(64, Math.round(state.imgWidth * scale));
+        const th = Math.max(64, Math.round(state.imgHeight * scale));
+        imgCanvas.width = tw;
+        imgCanvas.height = th;
+        imgCtx.fillStyle = "#f8f6fc";
+        imgCtx.fillRect(0, 0, tw, th);
+        imgCtx.drawImage(img, 0, 0, tw, th);
+
+        // 上传图像数据到 GPU 纹理
+        if (webglReady) {
+          gl.bindTexture(gl.TEXTURE_2D, glTex);
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, imgCanvas);
+        }
+
+        // 采样 64x64 缩略图，自动提取主色调和高饱和亮部焦点
+        const sampleW = 64, sampleH = 64;
+        const sc = document.createElement("canvas");
+        sc.width = sampleW; sc.height = sampleH;
+        const sctx = sc.getContext("2d");
+        sctx.drawImage(imgCanvas, 0, 0, sampleW, sampleH);
+        const px = sctx.getImageData(0, 0, sampleW, sampleH).data;
+
+        let rSum = 0, gSum = 0, bSum = 0, satCount = 0;
+        let rAll = 0, gAll = 0, bAll = 0;
+        const vividPts = [];
+
+        for (let y = 0; y < sampleH; y++) {
+          for (let x = 0; x < sampleW; x++) {
+            const idx = (y * sampleW + x) * 4;
+            const r = px[idx] / 255, g = px[idx + 1] / 255, b = px[idx + 2] / 255;
+            rAll += r; gAll += g; bAll += b;
+            const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+            const sat = mx > 0.001 ? (mx - mn) / mx : 0;
+            if (sat > 0.18) { rSum += r; gSum += g; bSum += b; satCount++; }
+            if (sat > 0.32 && mx > 0.78 && x > 6 && x < 58 && y > 6 && y < 58) {
+              vividPts.push({ u: x / sampleW, v: y / sampleH, r, g, b, score: sat * mx });
+            }
+          }
+        }
+        const total = sampleW * sampleH;
+        state.meanRgb = satCount > 20
+          ? [rSum / satCount, gSum / satCount, bSum / satCount]
+          : [rAll / total, gAll / total, bAll / total];
+
+        // 挑选最多 3 个互不重叠的高光焦点 + 3 个边角星闪锚点
+        vividPts.sort((a, b) => b.score - a.score);
+        const chosen = [];
+        for (const pt of vividPts) {
+          if (chosen.length >= 3) break;
+          const tooClose = chosen.some(c => Math.hypot(c.u - pt.u, c.v - pt.v) < 0.22);
+          if (!tooClose) {
+            chosen.push({
+              u: pt.u, v: pt.v, size: 17.5, focal: true,
+              color: [
+                Math.min(255, Math.round((pt.r * 0.5 + 0.55) * 255)),
+                Math.min(255, Math.round((pt.g * 0.5 + 0.55) * 255)),
+                Math.min(255, Math.round((pt.b * 0.5 + 0.55) * 255)),
+              ],
+            });
+          }
+        }
+        state.starAnchors = [
+          ...chosen,
+          { u: 0.065, v: 0.065, size: 12, color: [255, 230, 245], focal: false },
+          { u: 0.935, v: 0.935, size: 12, color: [255, 230, 199], focal: false },
+          { u: 0.500, v: 0.032, size: 11, color: [255, 240, 214], focal: false },
+        ];
+
+        // 标记已载入图片，隐藏空状态蒙层并按新图比例同步砖体尺寸
+        state.hasImage = true;
+        emptyStageOverlay.classList.add("hidden");
+        applyCardScale(Number(cardScaleSlider.value));
+      };
+      img.src = src;
+    }
+
+    // =========================================================================
+    // 模块 5：Canvas2D 最终单帧合成管线（背景 -> 光晕 -> 阴影 -> WebGL 砖体 -> 星芒粒子）
+    // =========================================================================
+    /** 用加法发光模式 (lighter) 在指定位置绘制 4 芒十字星闪 */
+    function drawStar2D(ctx, cx, cy, size, intensity, rgb, tiltDeg = 0) {
+      if (intensity <= 0.03 || size <= 1) return;
+      ctx.save();
+      ctx.translate(cx, cy);
+      if (tiltDeg) ctx.rotate(tiltDeg * Math.PI / 180);
+      ctx.globalCompositeOperation = "lighter";
+
+      const [r, g, b] = rgb;
+      const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, size * 0.85);
+      grad.addColorStop(0, `rgba(255,255,255,${Math.min(1, intensity * 0.85)})`);
+      grad.addColorStop(0.28, `rgba(${r},${g},${b},${Math.min(1, intensity * 0.55)})`);
+      grad.addColorStop(1, `rgba(${r},${g},${b},0)`);
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(0, 0, size * 0.85, 0, Math.PI * 2);
+      ctx.fill();
+
+      const drawSpike = (len, thick) => {
+        const sg = ctx.createLinearGradient(-len, 0, len, 0);
+        sg.addColorStop(0, `rgba(${r},${g},${b},0)`);
+        sg.addColorStop(0.5, `rgba(255,255,255,${Math.min(1, intensity * 0.95)})`);
+        sg.addColorStop(1, `rgba(${r},${g},${b},0)`);
+        ctx.fillStyle = sg;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, len, thick, 0, 0, Math.PI * 2);
+        ctx.fill();
+      };
+      drawSpike(size * 1.45, Math.max(0.9, size * 0.08));
+      ctx.rotate(Math.PI / 2);
+      drawSpike(size * 1.45, Math.max(0.9, size * 0.08));
+      ctx.restore();
+    }
+
+    /** 绘制前后景无缝循环微光粒子 */
+    function drawParticles2D(ctx, list, theta, w, h, resScale) {
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      for (const p of list) {
+        const px = (p.x0 + p.rx * Math.sin(p.fx * theta + p.px)) * w;
+        const py = (p.y0 + p.ry * Math.cos(p.fy * theta + p.py)) * h;
+        const twinkle = 0.35 + 0.65 * (0.5 + 0.5 * Math.sin(p.tf * theta + p.tp));
+        const alpha = p.alpha * twinkle;
+        const sz = p.size * resScale;
+        if (p.isStar) {
+          drawStar2D(ctx, px, py, sz * 2.2, alpha * 0.85, p.color, 0);
+        } else {
+          const [r, g, b] = p.color;
+          const grad = ctx.createRadialGradient(px, py, 0, px, py, sz * 2.2);
+          grad.addColorStop(0, `rgba(${r},${g},${b},${alpha})`);
+          grad.addColorStop(1, `rgba(${r},${g},${b},0)`);
+          ctx.fillStyle = grad;
+          ctx.beginPath();
+          ctx.arc(px, py, sz * 2.2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      ctx.restore();
+    }
+
+    /** 将完整一帧画面渲染到指定的 2D 上下文（实时预览与 GIF 导出共用此函数） */
+    function renderSceneToContext(targetCtx, w, h, theta, yaw, pitch, roll, floatY) {
+      const resScale = w / 460.0;
+      const cardW = state.cardW;
+      const cardH = state.cardH;
+      const focal = 1450.0 * resScale; // 长焦透视，减少大角度广角畸变
+      const nyaw = yaw / 17.5;
+      const npitch = pitch / 10.5;
+      const [colA, colB] = METAL_PALETTES[state.metal];
+
+      // 1. 深色摄影棚径向暗角背景（与原图主色调自动呼应）
+      const mr = state.meanRgb;
+      const cR = Math.round((0.09 + 0.13 * mr[0]) * 255);
+      const cG = Math.round((0.05 + 0.08 * mr[1]) * 255);
+      const cB = Math.round((0.12 + 0.14 * mr[2]) * 255);
+      const eR = Math.round(cR * 0.25), eG = Math.round(cG * 0.25), eB = Math.round(cB * 0.25);
+
+      const bgGrad = targetCtx.createRadialGradient(w * 0.5, h * 0.46, w * 0.04, w * 0.5, h * 0.48, Math.max(w, h) * 0.78);
+      bgGrad.addColorStop(0, `rgb(${cR},${cG},${cB})`);
+      bgGrad.addColorStop(1, `rgb(${eR},${eG},${eB})`);
+      targetCtx.fillStyle = bgGrad;
+      targetCtx.fillRect(0, 0, w, h);
+
+      // 2. 随倾角联动位移的呼吸氛围光晕
+      const breath = 1.0 + 0.16 * Math.sin(2.0 * theta);
+      const hx = w * 0.5 - nyaw * 16.0 * resScale;
+      const hy = h * 0.48 + floatY * 0.7 - npitch * 10.0 * resScale;
+      const haloShift = 0.5 + 0.5 * Math.sin(theta);
+      const hR = Math.round((colB[0] * haloShift + 0.45 * (1 - haloShift)) * 255);
+      const hG = Math.round((colB[1] * haloShift + 0.80 * (1 - haloShift)) * 255);
+      const hB = Math.round((colB[2] * haloShift + 1.00 * (1 - haloShift)) * 255);
+      const haloRad = Math.max(cardW, cardH) * 0.88;
+      const hGrad = targetCtx.createRadialGradient(hx, hy, 0, hx, hy, haloRad);
+      hGrad.addColorStop(0, `rgba(${hR},${hG},${hB},${0.38 * breath})`);
+      hGrad.addColorStop(0.55, `rgba(${hR},${hG},${hB},${0.14 * breath})`);
+      hGrad.addColorStop(1, `rgba(${hR},${hG},${hB},0)`);
+      targetCtx.save();
+      targetCtx.globalCompositeOperation = "lighter";
+      targetCtx.fillStyle = hGrad;
+      targetCtx.fillRect(0, 0, w, h);
+      targetCtx.restore();
+
+      // 3. 后景循环微光粒子
+      drawParticles2D(targetCtx, bgParticles, theta, w, h, resScale);
+
+      // 4. WebGL 3D 亚克力砖本体（仅在用户上传图片后绘制）
+      if (state.hasImage && webglReady && glProgram) {
+        if (glCanvas.width !== w || glCanvas.height !== h) {
+          glCanvas.width = w;
+          glCanvas.height = h;
+        }
+        gl.viewport(0, 0, w, h);
+        gl.clearColor(0, 0, 0, 0);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        gl.useProgram(glProgram);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, glTex);
+        gl.uniform1i(glLoc.uTex, 0);
+
+        const cornerR = 26.0 * resScale * Math.min(cardW, cardH) / (340.0 * resScale);
+        gl.uniform2f(glLoc.uCardSize, cardW, cardH);
+        gl.uniform1f(glLoc.uCornerRadius, Math.max(8, cornerR));
+        gl.uniform1f(glLoc.uResScale, resScale);
+        const styleIdx = state.style === "cosmos" ? 0 : (state.style === "sunburst" ? 1 : (state.style === "silk" ? 2 : 3));
+        gl.uniform1i(glLoc.uStyle, styleIdx);
+        gl.uniform1i(glLoc.uEnableMetal, state.metal === "none" ? 0 : 1);
+        gl.uniform3fv(glLoc.uColA, colA);
+        gl.uniform3fv(glLoc.uColB, colB);
+        gl.uniform1f(glLoc.uTheta, theta);
+        gl.uniform1f(glLoc.uNyaw, nyaw);
+        gl.uniform1f(glLoc.uNpitch, npitch);
+
+        // 4a. 反向位移悬浮投影（位于砖体后方 +Z）
+        const shadowMvp = buildCardMvp(
+          cardW, cardH, w, h, yaw * 0.85, pitch * 0.85, roll,
+          +28.0 * resScale, focal,
+          -yaw * 1.18 * resScale, pitch * 0.95 * resScale + 22.0 * resScale - floatY * 0.35
+        );
+        gl.uniformMatrix4fv(glLoc.uMvp, false, shadowMvp);
+        gl.uniform1i(glLoc.uPassMode, 2);
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+        targetCtx.save();
+        targetCtx.filter = `blur(${Math.max(4, Math.round(13 * resScale))}px)`;
+        targetCtx.globalAlpha = 0.56 - 0.05 * Math.sin(theta - Math.PI * 0.25);
+        targetCtx.drawImage(glCanvas, 0, 0);
+        targetCtx.restore();
+
+        // 清空 WebGL 缓冲准备绘制清晰的 8 层厚度切片与砖体正面
+        gl.clear(gl.COLOR_BUFFER_BIT);
+
+        // 4b. 沿 +Z 方向从最远层向正面绘制 8 层实体厚度切片
+        const layerStep = 2.15 * resScale;
+        gl.uniform1i(glLoc.uPassMode, 1);
+        for (let idx = 8; idx >= 1; idx--) {
+          const zOff = idx * layerStep;
+          const depthFade = 0.55 + 0.45 * (1.0 - idx / 9.0);
+          const sliceMvp = buildCardMvp(cardW, cardH, w, h, yaw, pitch, roll, zOff, focal, 0, floatY);
+          gl.uniformMatrix4fv(glLoc.uMvp, false, sliceMvp);
+          gl.uniform1f(glLoc.uDepthFade, depthFade);
+          gl.uniform1f(glLoc.uLayerIdx, idx);
+          gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+        }
+
+        // 4c. 绘制砖体正面 (z = 0)
+        const frontMvp = buildCardMvp(cardW, cardH, w, h, yaw, pitch, roll, 0.0, focal, 0, floatY);
+        gl.uniformMatrix4fv(glLoc.uMvp, false, frontMvp);
+        gl.uniform1i(glLoc.uPassMode, 0);
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+        targetCtx.drawImage(glCanvas, 0, 0);
+      }
+
+      // 5. 锚定 4 芒十字星闪（扫光经过焦点时触发闪烁峰值）
+      const sweepCenter = nyaw * 1.25 + npitch * 0.45;
+      if (state.hasImage) state.starAnchors.forEach((a, idx) => {
+        const [sx, sy] = projectCardPoint(a.u, a.v, cardW, cardH, w, h, yaw, pitch, roll, focal, floatY);
+        const ldiag = ((a.u - 0.5) * 2.0) * 0.76 + ((a.v - 0.5) * 2.0) * 0.65;
+        const sweepHit = Math.exp(-Math.pow((ldiag - sweepCenter) / 0.26, 2));
+        if (a.focal) {
+          const pulse = 0.25 + 0.24 * (0.5 + 0.5 * Math.sin(2.0 * theta + idx * 0.6));
+          const intensity = Math.min(0.95, pulse + 0.72 * sweepHit);
+          const sz = a.size * resScale * (0.72 + 0.42 * sweepHit);
+          drawStar2D(targetCtx, sx, sy, sz, intensity, a.color, roll + 8 * Math.sin(theta));
+        } else {
+          const ambient = 0.14 * (0.5 + 0.5 * Math.sin(2.0 * theta + idx * 1.3));
+          const intensity = Math.min(1.0, ambient + 0.92 * Math.pow(sweepHit, 1.3));
+          const sz = a.size * resScale * (0.55 + 0.55 * sweepHit);
+          drawStar2D(targetCtx, sx, sy, sz, intensity, a.color, roll);
+        }
+      });
+
+      // 6. 前景循环星尘粒子
+      drawParticles2D(targetCtx, fgParticles, theta, w, h, resScale);
+    }
+
+    // =========================================================================
+    // 模块 6：内置零依赖纯 JS GIF89a 编码器（离线可用，无需加载第三方库）
+    // =========================================================================
+    /**
+     * Median Cut 中位切分算法：将每帧 24-bit 真彩色压缩为最优的 256 色调色板，
+     * 并结合 5-bit RGB 查表 (LUT) 与带死区阈值的 Floyd-Steinberg 误差扩散抖动，
+     * 在保持彩虹顺滑的同时抑制暗部噪点，提高 LZW 压缩率。
+     */
+    function quantizeMedianCut(rgba, width, height) {
+      const pixelCount = width * height;
+      const stride = Math.max(1, Math.floor(pixelCount / 20000));
+      const samples = [];
+      for (let i = 0; i < pixelCount; i += stride) {
+        const o = i * 4;
+        samples.push([rgba[o], rgba[o + 1], rgba[o + 2]]);
+      }
+
+      const boxes = [samples];
+      while (boxes.length < 256) {
+        let bestIdx = -1, bestRange = -1, bestChan = 0;
+        for (let b = 0; b < boxes.length; b++) {
+          const pts = boxes[b];
+          if (pts.length < 2) continue;
+          let rMin = 255, rMax = 0, gMin = 255, gMax = 0, bMin = 255, bMax = 0;
+          for (let i = 0; i < pts.length; i++) {
+            const p = pts[i];
+            if (p[0] < rMin) rMin = p[0]; if (p[0] > rMax) rMax = p[0];
+            if (p[1] < gMin) gMin = p[1]; if (p[1] > gMax) gMax = p[1];
+            if (p[2] < bMin) bMin = p[2]; if (p[2] > bMax) bMax = p[2];
+          }
+          const rR = rMax - rMin, gR = gMax - gMin, bR = bMax - bMin;
+          const mR = Math.max(rR, gR, bR);
+          if (mR > bestRange) {
+            bestRange = mR; bestIdx = b;
+            bestChan = mR === rR ? 0 : (mR === gR ? 1 : 2);
+          }
+        }
+        if (bestIdx === -1 || bestRange === 0) break;
+        const pts = boxes[bestIdx];
+        pts.sort((a, b) => a[bestChan] - b[bestChan]);
+        const mid = pts.length >> 1;
+        boxes.splice(bestIdx, 1, pts.slice(0, mid), pts.slice(mid));
+      }
+
+      const palette = new Uint8Array(256 * 3);
+      const palLen = boxes.length;
+      for (let i = 0; i < palLen; i++) {
+        const pts = boxes[i];
+        let r = 0, g = 0, b = 0;
+        for (let j = 0; j < pts.length; j++) {
+          r += pts[j][0]; g += pts[j][1]; b += pts[j][2];
+        }
+        palette[i * 3]     = Math.round(r / pts.length);
+        palette[i * 3 + 1] = Math.round(g / pts.length);
+        palette[i * 3 + 2] = Math.round(b / pts.length);
+      }
+
+      // 构建 32x32x32 颜色索引查找表，加速百万像素级最近色匹配
+      const lut = new Uint8Array(32768);
+      for (let r = 0; r < 32; r++) {
+        const rv = (r << 3) | 4;
+        for (let g = 0; g < 32; g++) {
+          const gv = (g << 3) | 4;
+          for (let b = 0; b < 32; b++) {
+            const bv = (b << 3) | 4;
+            let best = 0, bestD = 1e9;
+            for (let p = 0; p < palLen; p++) {
+              const dr = rv - palette[p * 3];
+              const dg = gv - palette[p * 3 + 1];
+              const db = bv - palette[p * 3 + 2];
+              const d = dr * dr + dg * dg + db * db;
+              if (d < bestD) { bestD = d; best = p; }
+            }
+            lut[(r << 10) | (g << 5) | b] = best;
+          }
+        }
+      }
+
+      // Floyd-Steinberg 误差扩散映射
+      const indices = new Uint8Array(pixelCount);
+      const errR = new Float32Array(width + 2);
+      const errG = new Float32Array(width + 2);
+      const errB = new Float32Array(width + 2);
+      const nextR = new Float32Array(width + 2);
+      const nextG = new Float32Array(width + 2);
+      const nextB = new Float32Array(width + 2);
+
+      for (let y = 0; y < height; y++) {
+        nextR.fill(0); nextG.fill(0); nextB.fill(0);
+        for (let x = 0; x < width; x++) {
+          const pi = y * width + x;
+          const o = pi * 4;
+          const cr = Math.max(0, Math.min(255, rgba[o]     + errR[x + 1]));
+          const cg = Math.max(0, Math.min(255, rgba[o + 1] + errG[x + 1]));
+          const cb = Math.max(0, Math.min(255, rgba[o + 2] + errB[x + 1]));
+          const ci = lut[((cr >> 3) << 10) | ((cg >> 3) << 5) | (cb >> 3)];
+          indices[pi] = ci;
+
+          let dr = cr - palette[ci * 3];
+          let dg = cg - palette[ci * 3 + 1];
+          let db = cb - palette[ci * 3 + 2];
+          // 误差死区抑制：避免平滑暗部背景产生细碎网点破坏 LZW 压缩率
+          if (Math.abs(dr) + Math.abs(dg) + Math.abs(db) <= 6) {
+            dr = 0; dg = 0; db = 0;
+          } else {
+            dr *= 0.58; dg *= 0.58; db *= 0.58;
+          }
+
+          errR[x + 2] += dr * 0.4375; errG[x + 2] += dg * 0.4375; errB[x + 2] += db * 0.4375;
+          nextR[x]     += dr * 0.1875; nextG[x]     += dg * 0.1875; nextB[x]     += db * 0.1875;
+          nextR[x + 1] += dr * 0.3125; nextG[x + 1] += dg * 0.3125; nextB[x + 1] += db * 0.3125;
+          nextR[x + 2] += dr * 0.0625; nextG[x + 2] += dg * 0.0625; nextB[x + 2] += db * 0.0625;
+        }
+        errR.set(nextR); errG.set(nextG); errB.set(nextB);
+      }
+
+      return { palette, indices };
+    }
+
+    /** 标准变长 GIF LZW 无损字典压缩（开放寻址哈希表加速） */
+    function lzwEncode(indices) {
+      const minCodeSize = 8;
+      const clearCode = 256;
+      const eoiCode = 257;
+      const out = [];
+      let bitBuf = 0, bitCnt = 0;
+
+      const emit = (code, size) => {
+        bitBuf |= (code << bitCnt);
+        bitCnt += size;
+        while (bitCnt >= 8) {
+          out.push(bitBuf & 0xFF);
+          bitBuf >>= 8;
+          bitCnt -= 8;
+        }
+      };
+
+      const HASH_SIZE = 8192;
+      const hashKeys = new Int32Array(HASH_SIZE);
+      const hashVals = new Int32Array(HASH_SIZE);
+      const resetTable = () => { hashKeys.fill(-1); };
+
+      let codeSize = minCodeSize + 1;
+      let nextCode = eoiCode + 1;
+      resetTable();
+      emit(clearCode, codeSize);
+
+      let prefix = indices[0];
+      for (let i = 1; i < indices.length; i++) {
+        const k = indices[i];
+        const key = (prefix << 8) | k;
+        let slot = ((prefix << 5) ^ k) & (HASH_SIZE - 1);
+        let found = -1;
+        while (hashKeys[slot] !== -1) {
+          if (hashKeys[slot] === key) { found = hashVals[slot]; break; }
+          slot = (slot + 1) & (HASH_SIZE - 1);
+        }
+        if (found !== -1) {
+          prefix = found;
+        } else {
+          emit(prefix, codeSize);
+          if (nextCode < 4096) {
+            hashKeys[slot] = key;
+            hashVals[slot] = nextCode++;
+            if (nextCode > (1 << codeSize) && codeSize < 12) codeSize++;
+          } else {
+            emit(clearCode, codeSize);
+            resetTable();
+            codeSize = minCodeSize + 1;
+            nextCode = eoiCode + 1;
+          }
+          prefix = k;
+        }
+      }
+      emit(prefix, codeSize);
+      emit(eoiCode, codeSize);
+      if (bitCnt > 0) out.push(bitBuf & 0xFF);
+      return out;
+    }
+
+    /** 封装符合 GIF89a 规范的二进制数据流，支持无限循环 (NETSCAPE2.0) */
+    function createGifWriter(w, h, delayCs = 4) {
+      const chunks = [];
+      const u16 = (v) => [v & 0xFF, (v >> 8) & 0xFF];
+      chunks.push(new Uint8Array([
+        0x47, 0x49, 0x46, 0x38, 0x39, 0x61, // 文件头 "GIF89a"
+        ...u16(w), ...u16(h),
+        0x70, 0x00, 0x00,
+        // Netscape 2.0 无限循环扩展块
+        0x21, 0xFF, 0x0B,
+        0x4E, 0x45, 0x54, 0x53, 0x43, 0x41, 0x50, 0x45, 0x32, 0x2E, 0x30,
+        0x03, 0x01, 0x00, 0x00, 0x00,
+      ]));
+
+      return {
+        addFrame(rgba) {
+          const { palette, indices } = quantizeMedianCut(rgba, w, h);
+          const lzw = lzwEncode(indices);
+          // 图形控制扩展块（delayCs=4 表示 40ms = 25fps，disposal=2）
+          chunks.push(new Uint8Array([
+            0x21, 0xF9, 0x04, 0x08, ...u16(delayCs), 0x00, 0x00,
+            0x2C, 0x00, 0x00, 0x00, 0x00, ...u16(w), ...u16(h), 0x87,
+          ]));
+          chunks.push(palette);
+
+          const sub = [8];
+          for (let i = 0; i < lzw.length; i += 255) {
+            const end = Math.min(i + 255, lzw.length);
+            sub.push(end - i);
+            for (let j = i; j < end; j++) sub.push(lzw[j]);
+          }
+          sub.push(0);
+          chunks.push(new Uint8Array(sub));
+        },
+        finish() {
+          chunks.push(new Uint8Array([0x3B])); // GIF 结束符
+          return new Blob(chunks, { type: "image/gif" });
+        },
+      };
+    }
+
+    // =========================================================================
+    // 模块 7：UI 事件绑定、尺寸同步、拖拽旋转、文件导出与 60fps 主循环
+    // =========================================================================
+    /** 同步画布物理像素与右侧输入框、状态栏读数 */
+    function syncCanvasAndReadouts() {
+      canvas.width = state.canvasW;
+      canvas.height = state.canvasH;
+      canvasWInput.value = state.canvasW;
+      canvasHInput.value = state.canvasH;
+      cardWInput.value = state.cardW;
+      cardHInput.value = state.cardH;
+      metaReadout.textContent = `画布 ${state.canvasW}×${state.canvasH} · 砖体 ${state.cardW}×${state.cardH}`;
+    }
+
+    /** 按百分比缩放内部亚克力砖并保持原图宽高比 */
+    function applyCardScale(pct) {
+      const ratio = pct / 100;
+      const maxW = Math.round(state.canvasW * ratio);
+      const maxH = Math.round(state.canvasH * ratio);
+      const imgAspect = state.imgWidth / Math.max(1, state.imgHeight);
+      if (maxW / maxH > imgAspect) {
+        state.cardH = Math.max(16, maxH);
+        state.cardW = Math.max(16, Math.round(state.cardH * imgAspect));
+      } else {
+        state.cardW = Math.max(16, maxW);
+        state.cardH = Math.max(16, Math.round(state.cardW / imgAspect));
+      }
+      cardScaleSlider.value = pct;
+      cardScaleLabel.textContent = `${pct}%`;
+      syncCanvasAndReadouts();
+    }
+
+    /** 一键应用 460 / 800 / 1080 三档快捷预设 */
+    function applyPreset(widthPx) {
+      const resScale = widthPx / 460.0;
+      const imgAspect = state.imgWidth / Math.max(1, state.imgHeight);
+      const cardMaxW = Math.round(340 * resScale);
+      const cardMaxH = Math.round(380 * resScale);
+      let cw, ch;
+      if (cardMaxW / cardMaxH > imgAspect) {
+        ch = cardMaxH;
+        cw = Math.round(ch * imgAspect);
+      } else {
+        cw = cardMaxW;
+        ch = Math.round(cw / imgAspect);
+      }
+      state.canvasW = widthPx;
+      state.canvasH = Math.max(widthPx, ch + Math.round(140 * resScale));
+      state.cardW = cw;
+      state.cardH = ch;
+      const pct = Math.max(10, Math.min(100, Math.round(Math.max(cw / state.canvasW, ch / state.canvasH) * 100)));
+      cardScaleSlider.value = pct;
+      cardScaleLabel.textContent = `${pct}%`;
+      syncCanvasAndReadouts();
+    }
+
+    // 绑定底纹、金属色与分辨率预设按钮
+    document.querySelectorAll(".style-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        state.style = btn.dataset.style;
+        styleBadge.textContent = STYLE_LABELS[state.style];
+        document.querySelectorAll(".style-btn").forEach(b => b.classList.toggle("active", b === btn));
+      });
+    });
+
+    document.querySelectorAll(".metal-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        state.metal = btn.dataset.metal;
+        metalBadge.textContent = METAL_LABELS[state.metal];
+        document.querySelectorAll(".metal-btn").forEach(b => b.classList.toggle("active", b === btn));
+      });
+    });
+
+    document.querySelectorAll(".preset-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".preset-btn").forEach(b => b.classList.toggle("active", b === btn));
+        applyPreset(Number(btn.dataset.preset));
+      });
+    });
+
+    // 自定义画布宽高输入（无上限限制）
+    const onCanvasInput = () => {
+      document.querySelectorAll(".preset-btn").forEach(b => b.classList.remove("active"));
+      state.canvasW = Math.max(32, parseInt(canvasWInput.value, 10) || 460);
+      state.canvasH = Math.max(32, parseInt(canvasHInput.value, 10) || 480);
+      syncCanvasAndReadouts();
+    };
+    canvasWInput.addEventListener("change", onCanvasInput);
+    canvasHInput.addEventListener("change", onCanvasInput);
+
+    // 内部砖体缩放滑块与像素输入（无上限限制）
+    cardScaleSlider.addEventListener("input", () => applyCardScale(Number(cardScaleSlider.value)));
+    lockAspectToggle.addEventListener("change", () => { state.lockAspect = lockAspectToggle.checked; });
+
+    cardWInput.addEventListener("change", () => {
+      const val = Math.max(16, parseInt(cardWInput.value, 10) || state.cardW);
+      state.cardW = val;
+      if (state.lockAspect) {
+        const aspect = state.imgWidth / Math.max(1, state.imgHeight);
+        state.cardH = Math.max(16, Math.round(val / aspect));
+      }
+      syncCanvasAndReadouts();
+    });
+
+    cardHInput.addEventListener("change", () => {
+      const val = Math.max(16, parseInt(cardHInput.value, 10) || state.cardH);
+      state.cardH = val;
+      if (state.lockAspect) {
+        const aspect = state.imgWidth / Math.max(1, state.imgHeight);
+        state.cardW = Math.max(16, Math.round(val * aspect));
+      }
+      syncCanvasAndReadouts();
+    });
+
+    // 切换「自动摇晃循环」与「鼠标拖拽指定角度」
+    function setMode(m) {
+      state.mode = m;
+      const isAuto = m === "auto";
+      modeAutoBtn.className = isAuto
+        ? "px-3 py-1.5 rounded-lg text-xs font-medium transition bg-purple-500/30 text-white border border-purple-400/50"
+        : "px-3 py-1.5 rounded-lg text-xs font-medium transition text-slate-300 hover:text-white border border-transparent";
+      modeDragBtn.className = !isAuto
+        ? "px-3 py-1.5 rounded-lg text-xs font-medium transition bg-purple-500/30 text-white border border-purple-400/50"
+        : "px-3 py-1.5 rounded-lg text-xs font-medium transition text-slate-300 hover:text-white border border-transparent";
+      resetAngleBtn.classList.toggle("hidden", isAuto);
+    }
+    modeAutoBtn.addEventListener("click", () => setMode("auto"));
+    modeDragBtn.addEventListener("click", () => setMode("drag"));
+    resetAngleBtn.addEventListener("click", () => { state.dragYaw = 0; state.dragPitch = 0; });
+
+    // 鼠标/触控拖拽直接旋转亚克力砖
+    canvas.addEventListener("pointerdown", (e) => {
+      if (!state.hasImage) return;
+      state.isDragging = true;
+      state.lastPointerX = e.clientX;
+      state.lastPointerY = e.clientY;
+      canvas.setPointerCapture(e.pointerId);
+      canvas.classList.replace("cursor-grab-custom", "cursor-grabbing-custom");
+      if (state.mode !== "drag") setMode("drag");
+    });
+    canvas.addEventListener("pointermove", (e) => {
+      if (!state.isDragging) return;
+      const dx = e.clientX - state.lastPointerX;
+      const dy = e.clientY - state.lastPointerY;
+      state.lastPointerX = e.clientX;
+      state.lastPointerY = e.clientY;
+      state.dragYaw = Math.max(-26, Math.min(26, state.dragYaw + dx * 0.24));
+      state.dragPitch = Math.max(-18, Math.min(18, state.dragPitch - dy * 0.20));
+    });
+    const endDrag = () => {
+      state.isDragging = false;
+      canvas.classList.replace("cursor-grabbing-custom", "cursor-grab-custom");
+    };
+    canvas.addEventListener("pointerup", endDrag);
+    canvas.addEventListener("pointercancel", endDrag);
+
+    // 文件选择与拖拽上传逻辑
+    function handleFile(file) {
+      if (!file || !file.type.startsWith("image/")) {
+        showToast("请选择有效的图片文件（JPG / PNG / WebP）");
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        loadImageSource(ev.target.result, file.name);
+        showToast(`已载入图片：${file.name}`);
+      };
+      reader.readAsDataURL(file);
+    }
+    emptyStageOverlay.addEventListener("click", () => fileInput.click());
+    fileInput.addEventListener("change", (e) => {
+      if (e.target.files && e.target.files[0]) handleFile(e.target.files[0]);
+      e.target.value = "";
+    });
+    stageWrap.addEventListener("dragover", (e) => { e.preventDefault(); stageWrap.classList.add("drag-over"); });
+    stageWrap.addEventListener("dragleave", () => stageWrap.classList.remove("drag-over"));
+    stageWrap.addEventListener("drop", (e) => {
+      e.preventDefault();
+      stageWrap.classList.remove("drag-over");
+      if (e.dataTransfer.files && e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+    });
+
+    // 导出当前角度高清 PNG 静图
+    exportPngBtn.addEventListener("click", () => {
+      if (!state.hasImage) {
+        showToast("请先上传或拖入一张图片！");
+        return;
+      }
+      const a = document.createElement("a");
+      a.href = canvas.toDataURL("image/png");
+      a.download = `${state.imgName}_acrylic_${state.style}_${state.metal}_${state.canvasW}x${state.canvasH}.png`;
+      a.click();
+      showToast("当前角度高清静图已开始下载！");
+    });
+
+    // 异步分帧导出 48 帧无缝循环 GIF（避免阻塞主线程假死）
+    cancelExportBtn.addEventListener("click", () => { state.cancelExport = true; });
+    exportGifBtn.addEventListener("click", async () => {
+      if (!state.hasImage) {
+        showToast("请先上传或拖入一张图片！");
+        return;
+      }
+      if (state.isExporting) return;
+      state.isExporting = true;
+      state.cancelExport = false;
+      exportGifBtn.disabled = true;
+      exportGifBtn.classList.add("opacity-60", "cursor-not-allowed");
+      progressBox.classList.remove("hidden");
+      progressBar.style.width = "0%";
+      progressText.textContent = "正在初始化 GIF 编码器...";
+
+      const w = state.canvasW;
+      const h = state.canvasH;
+      const resScale = w / 460.0;
+      const expCanvas = document.createElement("canvas");
+      expCanvas.width = w;
+      expCanvas.height = h;
+      const expCtx = expCanvas.getContext("2d", { willReadFrequently: true });
+
+      const NUM_FRAMES = 48;
+      const writer = createGifWriter(w, h, 4); // 40ms = 25fps
+
+      try {
+        for (let f = 0; f < NUM_FRAMES; f++) {
+          if (state.cancelExport) {
+            showToast("已取消 GIF 导出");
+            break;
+          }
+          const theta = (2 * Math.PI * f) / NUM_FRAMES;
+          const yaw = 17.5 * Math.sin(theta);
+          const pitch = 10.5 * Math.cos(theta);
+          const roll = 2.2 * Math.sin(2 * theta);
+          const floatY = 6.5 * resScale * Math.sin(theta - Math.PI * 0.25);
+
+          renderSceneToContext(expCtx, w, h, theta, yaw, pitch, roll, floatY);
+          const imgData = expCtx.getImageData(0, 0, w, h);
+          writer.addFrame(imgData.data);
+
+          const pct = Math.round(((f + 1) / NUM_FRAMES) * 100);
+          progressBar.style.width = `${pct}%`;
+          progressText.textContent = `正在渲染与压制第 ${f + 1} / ${NUM_FRAMES} 帧 (${pct}%)...`;
+          // 让出主线程一拍，确保进度条实时刷新与“取消”按钮可响应
+          await new Promise(r => setTimeout(r, 0));
+        }
+
+        if (!state.cancelExport) {
+          const blob = writer.finish();
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `${state.imgName}_acrylic_${state.style}_${state.metal}_${w}x${h}.gif`;
+          a.click();
+          setTimeout(() => URL.revokeObjectURL(url), 4000);
+          const mb = (blob.size / (1024 * 1024)).toFixed(2);
+          showToast(`GIF 导出成功！大小 ${mb} MB（48 帧无缝循环）`, 5000);
+        }
+      } catch (err) {
+        console.error(err);
+        showToast("导出失败，请尝试调小分辨率后重试");
+      } finally {
+        state.isExporting = false;
+        exportGifBtn.disabled = false;
+        exportGifBtn.classList.remove("opacity-60", "cursor-not-allowed");
+        progressBox.classList.add("hidden");
+      }
+    });
+
+    // 60fps 实时动画渲染主循环
+    const startTime = performance.now();
+    function tick(now) {
+      if (!state.isExporting) {
+        const elapsed = (now - startTime) / 1000;
+        const loopSec = 1.92; // 与导出的 48 帧 × 40ms 周期保持一致
+        const theta = ((elapsed % loopSec) / loopSec) * Math.PI * 2;
+        const resScale = state.canvasW / 460.0;
+
+        let yaw, pitch, roll, floatY;
+        if (state.mode === "auto") {
+          yaw = 17.5 * Math.sin(theta);
+          pitch = 10.5 * Math.cos(theta);
+          roll = 2.2 * Math.sin(2 * theta);
+          floatY = 6.5 * resScale * Math.sin(theta - Math.PI * 0.25);
+        } else {
+          yaw = state.dragYaw;
+          pitch = state.dragPitch;
+          roll = 0;
+          floatY = 0;
+        }
+
+        angleReadout.textContent = `Y: ${yaw.toFixed(1)}° · X: ${pitch.toFixed(1)}°`;
+        renderSceneToContext(ctx2d, state.canvasW, state.canvasH, theta, yaw, pitch, roll, floatY);
+      }
+      requestAnimationFrame(tick);
+    }
+
+    // 启动初始化：无默认图片，等待用户上传或拖入图片
+    syncCanvasAndReadouts();
+    requestAnimationFrame(tick);
+  })();
+  </script>
+</body>
+</html>
