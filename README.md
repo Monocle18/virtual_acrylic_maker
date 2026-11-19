@@ -20,10 +20,13 @@
 
 ## 快速开始
 
-### 本地直接使用
+### 下载后本地使用
 1. 下载本仓库中的 `virtual-acrylic-maker.html`（或直接 `git clone` 本仓库）。
 2. 双击 `virtual-acrylic-maker.html`，使用 Chrome / Edge / Firefox / Safari 等现代浏览器打开。
 3. 点击预览区或将本地图片（JPG / PNG / WebP）直接拖入窗口，调节效果后点击导出即可。
+
+### 网页试用
+https://monocle18.github.io/virtual_acrylic_maker/
 
 ## 参数与导出参考
 
