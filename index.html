@@ -5,31 +5,44 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>虚拟亚克力砖生成器 (virtual-acrylic-maker)</title>
   <!-- 使用 Tailwind CSS CDN 快速构建响应式暗色工作室界面 -->
-  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
   <style>
-    /* 引入 Inter 现代无衬线字体，搭配中文字体回退栈 */
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    /* ==================== 1. 基础重置 (Tailwind Preflight 精简版) ==================== */
+    *, ::before, ::after {
+      box-sizing: border-box;
+      border-width: 0;
+      border-style: solid;
+      border-color: #e5e7eb;
+    }
+    html { line-height: 1.5; -webkit-text-size-adjust: 100%; }
+    body { margin: 0; line-height: inherit; }
+    h1, h2, h3, p { margin: 0; font-size: inherit; font-weight: inherit; }
+    button, input {
+      font-family: inherit;
+      font-size: 100%;
+      font-weight: inherit;
+      line-height: inherit;
+      color: inherit;
+      margin: 0;
+      padding: 0;
+    }
+    button { background-color: transparent; background-image: none; cursor: pointer; }
+    svg, canvas { display: block; vertical-align: middle; }
+    [hidden] { display: none; }
 
-    * { box-sizing: border-box; }
-
-    /* 页面整体深紫炭黑径向渐变背景，突出亚克力砖的通透与反光 */
+    /* ==================== 2. 页面自定义样式（已移除 Google Fonts 外链） ==================== */
     body {
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
       background: radial-gradient(circle at 20% 0%, #1b132b 0%, #0d0a16 55%, #07050c 100%);
       color: #f1eff7;
       min-height: 100vh;
       overflow-x: hidden;
     }
-
-    /* 右侧控制面板的磨砂玻璃质感样式 */
     .glass-panel {
       background: rgba(22, 17, 36, 0.78);
       backdrop-filter: blur(14px);
       -webkit-backdrop-filter: blur(14px);
       border: 1px solid rgba(255, 255, 255, 0.09);
     }
-
-    /* 通用选项按钮（底纹、金属边、分辨率预设）的默认/悬停/激活态 */
     .option-btn {
       transition: all 0.18s ease;
       border: 1px solid rgba(255, 255, 255, 0.1);
@@ -45,11 +58,7 @@
       box-shadow: 0 0 0 1px rgba(192, 132, 252, 0.35), 0 6px 18px rgba(139, 92, 246, 0.22);
       color: #ffffff;
     }
-
-    /* 滑块与数字输入框的主题色美化 */
-    input[type="range"] {
-      accent-color: #c084fc;
-    }
+    input[type="range"] { accent-color: #c084fc; }
     input[type="number"] {
       background: rgba(10, 8, 18, 0.75);
       border: 1px solid rgba(255, 255, 255, 0.14);
@@ -60,8 +69,6 @@
       border-color: #c084fc;
       box-shadow: 0 0 0 2px rgba(192, 132, 252, 0.25);
     }
-
-    /* 左侧预览舞台容器：支持外部文件拖入高亮 */
     #stageWrap {
       background: radial-gradient(circle at center, rgba(139, 92, 246, 0.12), rgba(7, 5, 14, 0.85));
       border: 1px solid rgba(255, 255, 255, 0.08);
@@ -70,8 +77,6 @@
       border-color: #c084fc;
       box-shadow: 0 0 0 3px rgba(192, 132, 252, 0.35);
     }
-
-    /* 实时预览画布：自适应屏幕高度，禁用默认触摸滚动以便拖拽旋转 */
     #previewCanvas {
       max-width: 100%;
       max-height: 70vh;
@@ -82,11 +87,223 @@
       touch-action: none;
       user-select: none;
     }
-
-    /* 鼠标抓取/拖拽手势样式 */
     .cursor-grab-custom { cursor: grab; }
     .cursor-grabbing-custom { cursor: grabbing; }
+
+    /* ==================== 3. 内联 Tailwind 工具类 ==================== */
+    /* 布局与定位 */
+    .relative { position: relative; }
+    .absolute { position: absolute; }
+    .inset-0 { inset: 0; }
+    .block { display: block; }
+    .inline-block { display: inline-block; }
+    .flex { display: flex; }
+    .inline-flex { display: inline-flex; }
+    .grid { display: grid; }
+    .hidden { display: none; }
+    .flex-col { flex-direction: column; }
+    .flex-wrap { flex-wrap: wrap; }
+    .items-start { align-items: flex-start; }
+    .items-center { align-items: center; }
+    .justify-center { justify-content: center; }
+    .justify-between { justify-content: space-between; }
+    .shrink-0 { flex-shrink: 0; }
+    .grid-cols-1 { grid-template-columns: repeat(1, minmax(0, 1fr)); }
+    .grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .overflow-hidden { overflow: hidden; }
+    .align-middle { vertical-align: middle; }
+
+    /* 尺寸与间距 */
+    .max-w-7xl { max-width: 80rem; }
+    .w-3 { width: 0.75rem; }
+    .w-4 { width: 1rem; }
+    .w-5 { width: 1.25rem; }
+    .w-6 { width: 1.5rem; }
+    .w-9 { width: 2.25rem; }
+    .w-12 { width: 3rem; }
+    .w-full { width: 100%; }
+    .h-2 { height: 0.5rem; }
+    .h-3 { height: 0.75rem; }
+    .h-4 { height: 1rem; }
+    .h-5 { height: 1.25rem; }
+    .h-6 { height: 1.5rem; }
+    .h-9 { height: 2.25rem; }
+    .h-12 { height: 3rem; }
+    .h-full { height: 100%; }
+    .min-h-\[420px\] { min-height: 420px; }
+
+    .mx-auto { margin-left: auto; margin-right: auto; }
+    .mt-0\.5 { margin-top: 0.125rem; }
+    .mt-1 { margin-top: 0.25rem; }
+    .mt-4 { margin-top: 1rem; }
+    .mr-1 { margin-right: 0.25rem; }
+    .ml-1 { margin-left: 0.25rem; }
+    .mb-1 { margin-bottom: 0.25rem; }
+    .mb-2\.5 { margin-bottom: 0.625rem; }
+    .mb-3 { margin-bottom: 0.75rem; }
+    .mb-4 { margin-bottom: 1rem; }
+    .mb-5 { margin-bottom: 1.25rem; }
+
+    .p-1 { padding: 0.25rem; }
+    .p-3 { padding: 0.75rem; }
+    .p-4 { padding: 1rem; }
+    .p-6 { padding: 1.5rem; }
+    .px-2 { padding-left: 0.5rem; padding-right: 0.5rem; }
+    .px-2\.5 { padding-left: 0.625rem; padding-right: 0.625rem; }
+    .px-3 { padding-left: 0.75rem; padding-right: 0.75rem; }
+    .px-3\.5 { padding-left: 0.875rem; padding-right: 0.875rem; }
+    .px-4 { padding-left: 1rem; padding-right: 1rem; }
+    .py-1 { padding-top: 0.25rem; padding-bottom: 0.25rem; }
+    .py-1\.5 { padding-top: 0.375rem; padding-bottom: 0.375rem; }
+    .py-2 { padding-top: 0.5rem; padding-bottom: 0.5rem; }
+    .py-2\.5 { padding-top: 0.625rem; padding-bottom: 0.625rem; }
+    .py-3 { padding-top: 0.75rem; padding-bottom: 0.75rem; }
+    .py-4 { padding-top: 1rem; padding-bottom: 1rem; }
+    .pt-1 { padding-top: 0.25rem; }
+    .pt-2 { padding-top: 0.5rem; }
+
+    .gap-1\.5 { gap: 0.375rem; }
+    .gap-2 { gap: 0.5rem; }
+    .gap-2\.5 { gap: 0.625rem; }
+    .gap-3 { gap: 0.75rem; }
+    .gap-5 { gap: 1.25rem; }
+    .space-y-2 > :not([hidden]) ~ :not([hidden]) { margin-top: 0.5rem; }
+    .space-y-2\.5 > :not([hidden]) ~ :not([hidden]) { margin-top: 0.625rem; }
+    .space-y-3 > :not([hidden]) ~ :not([hidden]) { margin-top: 0.75rem; }
+
+    /* 字体与文本 */
+    .antialiased { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+    .font-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+    .text-\[10px\] { font-size: 10px; line-height: 1.4; }
+    .text-\[11px\] { font-size: 11px; line-height: 1.4; }
+    .text-xs { font-size: 0.75rem; line-height: 1rem; }
+    .text-sm { font-size: 0.875rem; line-height: 1.25rem; }
+    .text-lg { font-size: 1.125rem; line-height: 1.75rem; }
+    .font-normal { font-weight: 400; }
+    .font-medium { font-weight: 500; }
+    .font-semibold { font-weight: 600; }
+    .font-bold { font-weight: 700; }
+    .leading-relaxed { line-height: 1.625; }
+    .tracking-tight { letter-spacing: -0.025em; }
+    .text-center { text-align: center; }
+    .underline { text-decoration-line: underline; }
+
+    /* 文本颜色 */
+    .text-white { color: #ffffff; }
+    .text-slate-200 { color: #e2e8f0; }
+    .text-slate-300 { color: #cbd5e1; }
+    .text-slate-400 { color: #94a3b8; }
+    .text-purple-200 { color: #e9d5ff; }
+    .text-purple-300 { color: #d8b4fe; }
+    .text-purple-300\/80 { color: rgb(216 180 254 / 0.8); }
+    .text-fuchsia-300 { color: #f0abfc; }
+    .text-amber-100 { color: #fef3c7; }
+    .text-amber-200 { color: #fde68a; }
+    .text-amber-300 { color: #fcd34d; }
+    .text-rose-300 { color: #fda4af; }
+    .text-emerald-200 { color: #a7f3d0; }
+    .hover\:text-white:hover { color: #ffffff; }
+    .hover\:text-rose-200:hover { color: #fecdd3; }
+
+    /* 背景与渐变 */
+    .bg-black\/25 { background-color: rgb(0 0 0 / 0.25); }
+    .bg-black\/40 { background-color: rgb(0 0 0 / 0.4); }
+    .bg-black\/55 { background-color: rgb(0 0 0 / 0.55); }
+    .bg-white\/8 { background-color: rgb(255 255 255 / 0.08); }
+    .bg-white\/10 { background-color: rgb(255 255 255 / 0.1); }
+    .bg-slate-700 { background-color: #334155; }
+    .bg-purple-500\/20 { background-color: rgb(168 85 247 / 0.2); }
+    .bg-purple-500\/30 { background-color: rgb(168 85 247 / 0.3); }
+    .bg-amber-500\/15 { background-color: rgb(245 158 11 / 0.15); }
+    .bg-emerald-500\/15 { background-color: rgb(16 185 129 / 0.15); }
+    .hover\:bg-white\/14:hover { background-color: rgb(255 255 255 / 0.14); }
+    .hover\:bg-white\/15:hover { background-color: rgb(255 255 255 / 0.15); }
+
+    .bg-gradient-to-r { background-image: linear-gradient(to right, var(--tw-gradient-stops)); }
+    .bg-gradient-to-br { background-image: linear-gradient(to bottom right, var(--tw-gradient-stops)); }
+    .from-fuchsia-400 { --tw-gradient-from: #e879f9; --tw-gradient-to: rgb(232 121 249 / 0); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+    .from-fuchsia-500 { --tw-gradient-from: #d946ef; --tw-gradient-to: rgb(217 70 239 / 0); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+    .from-amber-300 { --tw-gradient-from: #fcd34d; --tw-gradient-to: rgb(252 211 77 / 0); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+    .from-yellow-200 { --tw-gradient-from: #fef08a; --tw-gradient-to: rgb(254 240 138 / 0); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+    .from-slate-100 { --tw-gradient-from: #f1f5f9; --tw-gradient-to: rgb(241 245 249 / 0); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+    .via-purple-500 { --tw-gradient-to: rgb(168 85 247 / 0); --tw-gradient-stops: var(--tw-gradient-from), #a855f7, var(--tw-gradient-to); }
+    .to-cyan-400 { --tw-gradient-to: #22d3ee; }
+    .to-cyan-500 { --tw-gradient-to: #06b6d4; }
+    .to-purple-400 { --tw-gradient-to: #c084fc; }
+    .to-amber-500 { --tw-gradient-to: #f59e0b; }
+    .to-sky-300 { --tw-gradient-to: #7dd3fc; }
+
+    /* 边框与圆角 */
+    .border { border-width: 1px; }
+    .border-2 { border-width: 2px; }
+    .border-t { border-top-width: 1px; }
+    .border-dashed { border-style: dashed; }
+    .border-transparent { border-color: transparent; }
+    .border-white\/10 { border-color: rgb(255 255 255 / 0.1); }
+    .border-white\/12 { border-color: rgb(255 255 255 / 0.12); }
+    .border-white\/15 { border-color: rgb(255 255 255 / 0.15); }
+    .border-slate-400 { border-color: #94a3b8; }
+    .border-purple-400\/30 { border-color: rgb(192 132 252 / 0.3); }
+    .border-purple-400\/40 { border-color: rgb(192 132 252 / 0.4); }
+    .border-purple-400\/45 { border-color: rgb(192 132 252 / 0.45); }
+    .border-purple-400\/50 { border-color: rgb(192 132 252 / 0.5); }
+    .border-amber-400\/45 { border-color: rgb(251 191 36 / 0.45); }
+    .border-emerald-400\/30 { border-color: rgb(52 211 153 / 0.3); }
+    .hover\:border-purple-300\/80:hover { border-color: rgb(216 180 254 / 0.8); }
+
+    .rounded { border-radius: 0.25rem; }
+    .rounded-lg { border-radius: 0.5rem; }
+    .rounded-xl { border-radius: 0.75rem; }
+    .rounded-2xl { border-radius: 1rem; }
+    .rounded-full { border-radius: 9999px; }
+
+    /* 阴影、模糊、交互与动效 */
+    .shadow-lg {
+      --tw-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+      --tw-shadow-colored: 0 10px 15px -3px var(--tw-shadow-color), 0 4px 6px -4px var(--tw-shadow-color);
+      box-shadow: var(--tw-shadow-colored, var(--tw-shadow));
+    }
+    .shadow-purple-500\/25 { --tw-shadow-color: rgb(168 85 247 / 0.25); }
+    .backdrop-blur-sm { -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
+    .opacity-60 { opacity: 0.6; }
+    .accent-purple-400 { accent-color: #c084fc; }
+    .cursor-pointer { cursor: pointer; }
+    .cursor-not-allowed { cursor: not-allowed; }
+    .select-none { user-select: none; -webkit-user-select: none; }
+    .transition {
+      transition-property: color, background-color, border-color, opacity, box-shadow, transform, filter, backdrop-filter;
+      transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+      transition-duration: 150ms;
+    }
+    .transition-all {
+      transition-property: all;
+      transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+      transition-duration: 150ms;
+    }
+    .duration-150 { transition-duration: 150ms; }
+    .hover\:brightness-110:hover { filter: brightness(1.1); }
+    .active\:scale-\[0\.99\]:active { transform: scale(0.99); }
+
+    /* 响应式断点 (md / lg / xl) */
+    @media (min-width: 768px) {
+      .md\:py-6 { padding-top: 1.5rem; padding-bottom: 1.5rem; }
+      .md\:p-5 { padding: 1.25rem; }
+      .md\:p-6 { padding: 1.5rem; }
+      .md\:text-xl { font-size: 1.25rem; line-height: 1.75rem; }
+      .md\:min-h-\[540px\] { min-height: 540px; }
+    }
+    @media (min-width: 1024px) {
+      .lg\:grid-cols-12 { grid-template-columns: repeat(12, minmax(0, 1fr)); }
+      .lg\:col-span-7 { grid-column: span 7 / span 7; }
+      .lg\:col-span-5 { grid-column: span 5 / span 5; }
+    }
+    @media (min-width: 1280px) {
+      .xl\:col-span-8 { grid-column: span 8 / span 8; }
+      .xl\:col-span-4 { grid-column: span 4 / span 4; }
+    }
   </style>
+  
 </head>
 <body class="antialiased">
   <div class="max-w-7xl mx-auto px-4 py-4 md:py-6">
@@ -193,10 +410,10 @@
           </div>
         </div>
 
-        <!-- 2. 金属卡边与烫金色调 -->
+        <!-- 2. 亚克力色调 -->
         <div>
           <div class="flex items-center justify-between mb-2.5">
-            <h2 class="text-sm font-semibold text-white">2. 金属卡边与烫金色调</h2>
+            <h2 class="text-sm font-semibold text-white">2. 亚克力色调</h2>
             <span id="metalBadge" class="text-xs text-amber-300">幻彩紫金</span>
           </div>
           <div class="grid grid-cols-2 gap-2">
@@ -214,7 +431,7 @@
             </button>
             <button type="button" data-metal="none" class="metal-btn option-btn rounded-xl py-2 px-2 text-center">
               <span class="inline-block w-3 h-3 rounded-full border border-slate-400 bg-slate-700 mr-1 align-middle"></span>
-              <span class="text-xs font-semibold align-middle">无金属边</span>
+              <span class="text-xs font-semibold align-middle">无</span>
             </button>
           </div>
         </div>
@@ -333,7 +550,7 @@
    * ============================================================================
    * 【架构总览（适合前端与图形学新手阅读）】
    * 本文件将所有逻辑封装在一个自执行函数 (IIFE) 中，不污染全局命名空间，共分 7 大模块：
-   *   模块 1：全局状态与配置常量（管理底纹、金属色、画布/砖体尺寸、拖拽角度等）
+   *   模块 1：全局状态与配置常量（管理底纹、亚克力色、画布/砖体尺寸、拖拽角度等）
    *   模块 2：确定性伪随机数与无缝循环空间粒子生成器
    *   模块 3：WebGL1 实时 GPU 着色器引擎（圆角 SDF、8 层立体厚度、3 种全息底纹、Sobel 微浮雕）
    *   模块 4：图片载入器（支持透明 PNG 合成珍珠底、自动提取主色调与高光星芒锚点）
@@ -357,15 +574,15 @@
       violet_gold: "幻彩紫金",
       gold: "鎏金色",
       silver: "冰银色",
-      none: "无金属边",
+      none: "无",
     };
 
-    // 每种金属边框的主色 (colA) 与辅色 (colB)，范围 0.0 ~ 1.0
+    // 每种亚克力的主色 (colA) 与辅色 (colB)，范围 0.0 ~ 1.0
     const METAL_PALETTES = {
       violet_gold: [[0.96, 0.78, 0.48], [0.82, 0.56, 0.96]],
       gold:        [[0.99, 0.83, 0.40], [0.86, 0.64, 0.24]],
       silver:      [[0.86, 0.93, 1.00], [0.62, 0.78, 0.96]],
-      none:        [[0.22, 0.20, 0.26], [0.14, 0.12, 0.18]], // 关闭金属边时使用低调哑光侧边
+      none:        [[0.22, 0.20, 0.26], [0.14, 0.12, 0.18]], // 关闭亚克力时使用低调哑光侧边
     };
 
     // 应用核心响应式状态对象
@@ -375,7 +592,7 @@
       imgWidth: 1080,          // 原图原始宽度（用于锁定宽高比计算）
       imgHeight: 1080,         // 原图原始高度
       style: "cosmos",         // 当前全息底纹风格：cosmos | sunburst | silk | none
-      metal: "violet_gold",    // 当前金属卡边色调：violet_gold | gold | silver | none
+      metal: "violet_gold",    // 当前亚克力色调：violet_gold | gold | silver | none
       mode: "auto",            // 预览模式：auto（自动摇晃）| drag（鼠标拖拽指定角度）
       canvasW: 460,            // 输出画布宽度 (px)
       canvasH: 480,            // 输出画布高度 (px)
@@ -512,9 +729,9 @@
       uniform float uCornerRadius;   // 圆角半径 (px)
       uniform float uResScale;       // 分辨率缩放系数 (canvasW / 460)
       uniform int uStyle;            // 0=宇宙星斑, 1=放射太阳纹, 2=水波丝绸纹, 3=无底纹
-      uniform int uEnableMetal;      // 1=启用金属倒角与烫金, 0=无金属边
-      uniform vec3 uColA;            // 金属主色
-      uniform vec3 uColB;            // 金属辅色
+      uniform int uEnableMetal;      // 1=启用倒角与烫金, 0=无亚克力
+      uniform vec3 uColA;            // 亚克力主色
+      uniform vec3 uColB;            // 亚克力辅色
       uniform float uTheta;          // 动画主周期相位 (0 ~ 2π)
       uniform float uNyaw;           // 归一化 Y 轴倾角 (-1 ~ 1)
       uniform float uNpitch;         // 归一化 X 轴倾角 (-1 ~ 1)
@@ -606,7 +823,7 @@
           return;
         }
 
-        // 【通道 1】背面 8 层厚度切片模式：呈现实体亚克力/金属侧边厚度
+        // 【通道 1】背面 8 层厚度切片模式：呈现实体亚克力/亚克力侧边厚度
         if (uPassMode == 1) {
           if (uEnableMetal == 0) {
             vec3 matteEdge = mix(uColB, uColA, 0.5) * uDepthFade;
@@ -627,13 +844,13 @@
         vec3 hsv = rgb2hsv(baseRgb);
         float gray = dot(baseRgb, vec3(0.299, 0.587, 0.114));
 
-        // 对圆角 SDF 做中心差分求梯度，得到指向外部的金属倒角法线
+        // 对圆角 SDF 做中心差分求梯度，得到指向外部的倒角法线
         float eps = 1.0;
         float sx = roundedRectSdf(px + vec2(eps, 0.0), halfSize, uCornerRadius) - roundedRectSdf(px - vec2(eps, 0.0), halfSize, uCornerRadius);
         float sy = roundedRectSdf(px + vec2(0.0, eps), halfSize, uCornerRadius) - roundedRectSdf(px - vec2(0.0, eps), halfSize, uCornerRadius);
         vec2 bevelN = normalize(vec2(sx, sy) + vec2(1e-5));
 
-        // 分区遮罩：外沿金属倒角、内侧细金框、局部亮部烫金区、全息背景区
+        // 分区遮罩：外沿倒角、内侧细金框、局部亮部烫金区、全息背景区
         float bevelMask = smoothstep(-10.5 * uResScale, -6.5 * uResScale, sdf) * (1.0 - smoothstep(-0.2 * uResScale, 0.8 * uResScale, sdf));
         float innerTrim = exp(-pow((sdf + 13.5 * uResScale) / (1.4 * uResScale), 2.0)) * 0.90;
 
@@ -719,7 +936,7 @@
           face = 1.0 - (1.0 - face) * (1.0 - clamp((glareBand + spot) * glareCol * 0.64, 0.0, 0.62));
         }
 
-        // 当启用金属卡边（uEnableMetal == 1）时，叠加立体倒角金属边、细金框与局部亮部烫金
+        // 当启用亚克力（uEnableMetal == 1）时，叠加立体倒角亚克力边、细金框与局部亮部烫金
         if (uEnableMetal == 1) {
           float bevelDot = dot(bevelN, lightDir);
           float bevelSpec = pow(clamp(0.5 + 0.5 * bevelDot, 0.0, 1.0), 2.2);
@@ -1448,7 +1665,7 @@
       syncCanvasAndReadouts();
     }
 
-    // 绑定底纹、金属色与分辨率预设按钮
+    // 绑定底纹、亚克力色与分辨率预设按钮
     document.querySelectorAll(".style-btn").forEach(btn => {
       btn.addEventListener("click", () => {
         state.style = btn.dataset.style;
